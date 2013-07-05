@@ -4,13 +4,14 @@ This bot provides channel management services, so you can register official chan
 -
 COMMANDS:
 -
-REGISTER <#channel> - Register a new public channel, of which you will be the founder.
+REGISTER <#channel> - Register a new public channel, of which you will become the founder.
 DROP <#channel> - Delete a channel, unregistering it from the system.
 ACCESS <#channel> (private|public) - Set channel access to private or public.
 -
 SHORTCUTS:
 -
 /CS - Shortcut for /msg ChanServ
+/REGISTER - Shortcut for /msg ChanServ REGISTER
 !VOP (add|remove|list) <nickname> - Add or remove user from auto-voice list for current channel.
 !HOP (add|remove|list) <nickname> - Add or remove user from auto-half-op list for current channel.
 !AOP (add|remove|list) <nickname> - Add or remove user from auto-op list for current channel.

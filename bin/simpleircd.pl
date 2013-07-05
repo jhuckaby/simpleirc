@@ -976,6 +976,36 @@ sub _daemon_cmd_userinfo {
 	return [];
 };
 
+sub _daemon_cmd_register {
+	# custom command, shortcut for:
+	#	/msg nickserv register PASSWORD EMAIL
+	#	/msg chanserv register CHANNEL
+	my $ircd = shift;
+	my $nick = shift;
+	my $msg = 'REGISTER ' . join(' ', @_);
+	
+	if ($msg =~ /^register\s+([\'\"])([^\1]+)(\1)\s+(\S+)$/i) {
+		# ($password, $email) = ($2, $4);
+		# nickserv format A
+		my $nickserv = $ircd->plugin_get( 'NickServ' );
+		$nickserv->IRCD_daemon_privmsg( $ircd, \$nick, \"NickServ", \$msg, [] );
+	}
+	elsif ($msg =~ /^register\s+(\S+)\s+(\S+)$/i) {
+		# ($password, $email) = ($1, $2);
+		# nickserv format B
+		my $nickserv = $ircd->plugin_get( 'NickServ' );
+		$nickserv->IRCD_daemon_privmsg( $ircd, \$nick, \"NickServ", \$msg, [] );
+	}
+	elsif ($msg =~ /^register\s+\#(\S+)$/i) {
+		# chanserv
+		my $chanserv = $ircd->plugin_get( 'ChanServ' );
+		$chanserv->IRCD_daemon_privmsg( $ircd, \$nick, \"ChanServ", \$msg, [] );
+	}
+	
+	return () if wantarray;
+	return [];
+}
+
 sub _state_user_invited {
 	# overriding POE::Component::Server::IRC::_state_user_invited
 	# so we can deal with 'private' channels

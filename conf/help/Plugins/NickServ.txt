@@ -16,5 +16,6 @@ SHORTCUTS:
 -
 /NS - Shortcut for /msg NickServ
 /IDENTIFY - Shortcut for /msg NickServ IDENTIFY
+/REGISTER - Shortcut for /msg NickServ REGISTER
 -
 End of Help
