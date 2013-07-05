@@ -368,7 +368,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 			}
 			
 			return [
-				username_open + user.Username + username_close,
+				username_open + (user.DisplayUsername || user.Username) + username_close,
 				user.FullName || 'n/a',
 				user.Live ? '<span class="color_label online">Yes</span>' : '<span class="color_label offline">No</span>',
 				user.Host || 'n/a',

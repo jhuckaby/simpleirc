@@ -5,14 +5,14 @@ use warnings;
 use Tools;
 
 ##
-# Base class for Plugins
+# Base class for SimpleIRC Plugins
 ##
 
 sub add_custom_command{
 	# add custom IRC command like /ns
 	my ($self, $cmd, $code) = @_;
 	
-	$self->log_debug(4, "Adding custom command: $cmd");
+	$self->log_debug(4, "Adding custom command: /".uc($cmd));
 	
 	my $wrapper = sub {
 		my $ircd = shift;
@@ -139,7 +139,7 @@ sub schedule_event {
 	my ($self, $id, $event) = @_;
 	if (!$id) { $id = generate_unique_id(); }
 	$event->{when} ||= time();
-	$self->{schedule}->{$id} = $event;
+	$self->{schedule}->{lc($id)} = $event;
 }
 
 sub log_debug {

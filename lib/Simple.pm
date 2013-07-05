@@ -123,6 +123,7 @@ sub save_user {
 	if (!$user || !$user->{Registered}) { return 0; }
 	
 	my $now = time();
+	$user->{Username} = $nick;
 	$user->{Created} ||= $now;
 	$user->{Modified} = $now;
 	

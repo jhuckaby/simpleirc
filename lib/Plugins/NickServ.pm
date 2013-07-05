@@ -1,5 +1,6 @@
 ##
-# NickServ Bot
+# NickServ Bot for SimpleIRC 1.0
+# Copyright (c) 2013 Joseph Huckaby and EffectSoftware.com
 ##
 
 package POE::Component::Server::IRC::Plugin::NickServ;
@@ -105,6 +106,8 @@ sub IRCD_daemon_privmsg {
 			return PCSI_EAT_NONE;
 		}
 		
+		$user->{Username} = lc($nick);
+		$user->{DisplayUsername} = $nick;
 		$user->{Email} = $email;
 		$user->{ID} = generate_unique_id();
 		$user->{Password} = md5_hex( $password . $user->{ID} );
@@ -117,7 +120,6 @@ sub IRCD_daemon_privmsg {
 		my $unick = uc_irc($nick);
 		my $record = $ircd->{state}{users}{$unick};
 		if ($record) {
-			if ($record->{user}) { $user->{Username} = $record->{user}; }
 			if ($record->{ircname}) { $user->{FullName} = $record->{ircname}; }
 			if ($record->{socket} && $record->{socket}->[0]) { $user->{IP} = $record->{socket}->[0]; }
 		}
@@ -134,7 +136,7 @@ sub IRCD_daemon_privmsg {
 		$chanserv->sync_all_user_modes( '', $nick );
 		
 		# cleanup old schedule entries for nick reg
-		delete $self->{schedule}->{$nick};
+		delete $self->{schedule}->{lc($nick)};
 	} # register
 	
 	elsif ($msg =~ /^recover\s+(\S+)$/i) {
@@ -196,6 +198,7 @@ sub IRCD_daemon_privmsg {
 		
 		# success!
 		delete $user->{TempPasswordResetHash};
+		$user->{DisplayUsername} = $nick;
 		$user->{Password} = md5_hex( $new_password . $user->{ID} );
 		$user->{Registered} = 1;
 		$user->{LastLogin} = time();
@@ -205,7 +208,6 @@ sub IRCD_daemon_privmsg {
 		my $unick = uc_irc($nick);
 		my $record = $ircd->{state}{users}{$unick};
 		if ($record) {
-			if ($record->{user}) { $user->{Username} = $record->{user}; }
 			if ($record->{ircname}) { $user->{FullName} = $record->{ircname}; }
 			if ($record->{socket} && $record->{socket}->[0]) { $user->{IP} = $record->{socket}->[0]; }
 		}
@@ -222,7 +224,7 @@ sub IRCD_daemon_privmsg {
 		$chanserv->sync_all_user_modes( '', $nick );
 		
 		# cleanup old schedule entries for nick reg
-		delete $self->{schedule}->{$nick};
+		delete $self->{schedule}->{lc($nick)};
 	} # confirm password reset
 	
 	elsif ($msg =~ /^(identify|login)\s+(.+)$/i) {
@@ -248,6 +250,7 @@ sub IRCD_daemon_privmsg {
 			return PCSI_EAT_NONE;
 		}
 		
+		$user->{DisplayUsername} = $nick;
 		$user->{LastLogin} = time();
 		$user->{_identified} = 1; # underscore prefix = ram only (session variable, not permanent)
 		
@@ -272,7 +275,7 @@ sub IRCD_daemon_privmsg {
 		$chanserv->sync_all_user_modes( '', $nick );
 		
 		# cleanup old schedule entries for nick reg
-		delete $self->{schedule}->{$nick};
+		delete $self->{schedule}->{lc($nick)};
 	} # identify
 	
 	elsif ($msg =~ /^(drop|delete)\s+(\S+)$/i) {
@@ -307,7 +310,7 @@ sub IRCD_daemon_privmsg {
 		if ($target_nick) {
 			# okay, we have a target nick, proceed with drop operation
 			# cleanup old schedule entries for old nick reg
-			delete $self->{schedule}->{$target_nick};
+			delete $self->{schedule}->{lc($target_nick)};
 			
 			# if user is a server administrator, remove that too
 			if ($target_user->{Administrator}) {
@@ -381,7 +384,7 @@ sub IRCD_daemon_privmsg {
 			delete $user->{_identified};
 			
 			# cleanup old schedule entries for old nick reg
-			delete $self->{schedule}->{$nick};
+			delete $self->{schedule}->{lc($nick)};
 			
 			# if user is admin, remove the global 'o' priv
 			if ($user->{Administrator}) {
@@ -446,9 +449,15 @@ sub IRCD_daemon_nick {
 	# only manage nick if not spoofed
 	my $route_id = $ircd->_state_user_route($new_nick);
 	if ($route_id ne 'spoofed') {
-		if ($new_nick ne $nick) {
-			# cleanup old schedule entries for old nick reg
-			delete $self->{schedule}->{$nick};
+		my $old_user = undef;
+		if (lc($new_nick) ne lc($nick)) {
+			# load old user and UNidentify him
+			$old_user = $self->{resident}->get_user($nick);
+			delete $old_user->{_identified};
+			
+			# cleanup old schedule entries for both nicks
+			delete $self->{schedule}->{lc($nick)};
+			delete $self->{schedule}->{lc($new_nick)};
 			
 			# free up memory from old nick
 			$self->{resident}->unload_user($nick);
@@ -484,6 +493,20 @@ sub IRCD_daemon_nick {
 			} );
 		}
 		
+		if ($old_user && $old_user->{Administrator} && !$user->{Administrator}) {
+			my $route_id = $self->{ircd}->_state_user_route($new_nick);
+			if ($route_id) {
+				$self->{ircd}->_send_output_to_client($route_id, $_)
+					for $self->{ircd}->_daemon_cmd_umode($new_nick, '-o');
+			}
+		} # taketh away admin
+		
+		# update display nick if user is ident and reg
+		if ($user->{Registered} && $user->{_identified}) {
+			$user->{DisplayUsername} = $new_nick;
+			$self->{resident}->save_user($new_nick);
+		}
+		
 		my $chanserv = $self->{ircd}->plugin_get( 'ChanServ' );
 		$chanserv->sync_all_user_modes( '', $new_nick );
 		
@@ -498,7 +521,7 @@ sub IRCD_daemon_quit {
 	# $self->log_debug(9, "IRCD_daemon_quit: " . Dumper(\@_) );
 	
 	# cleanup old schedule entries for nick reg
-	delete $self->{schedule}->{$nick};
+	delete $self->{schedule}->{lc($nick)};
 	
 	# free up memory from old nick
 	$self->{resident}->unload_user($nick);

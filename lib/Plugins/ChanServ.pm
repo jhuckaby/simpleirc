@@ -106,7 +106,7 @@ sub IRCD_daemon_privmsg {
 		# register it!
 		$channel->{ID} = generate_unique_id();
 		$channel->{Registered} = 1;
-		$channel->{Founder} = $nick;
+		$channel->{Founder} = lc($nick);
 		$channel->{Users} = { lc($nick) => { Flags => 'o' } };
 		
 		$self->{resident}->save_channel($chan);
@@ -221,7 +221,7 @@ sub IRCD_daemon_join {
 		if ($user_stub && $user_stub->{Flags} && $user && $user->{_identified} && !$user->{Administrator}) { # operserv handles admins
 			$ircd->daemon_server_mode($chan, '+'.$user_stub->{Flags}, $nick);
 		}
-		elsif (($channel->{Founder} eq $nick) && $user && $user->{_identified} && !$user->{Administrator}) {
+		elsif (($channel->{Founder} eq lc($nick)) && $user && $user->{_identified} && !$user->{Administrator}) {
 			# channel founder
 			$ircd->daemon_server_mode($chan, '+o', $nick);
 		}
@@ -316,7 +316,7 @@ sub IRCD_daemon_mode {
 	if ($channel) {
 		if ($mode eq '+b') {
 			# add ban
-			my $ban_target = $target_nick;
+			my $ban_target = lc($target_nick);
 			$channel->{Bans} ||= [];
 			
 			$ban_target =~ /^(.+)\@(.+)$/;
@@ -336,7 +336,7 @@ sub IRCD_daemon_mode {
 		} # add ban
 		elsif ($mode eq '-b') {
 			# remove ban
-			my $ban_target = $target_nick;
+			my $ban_target = lc($target_nick);
 			$channel->{Bans} ||= [];
 			
 			$ban_target =~ /^(.+)\@(.+)$/;
@@ -347,16 +347,18 @@ sub IRCD_daemon_mode {
 			} # found ban
 		} # remove ban
 		elsif ($self->{resident}->get_user($target_nick, 0)) {
-			# set user mode and remember it
-			my $user = $channel->{Users}->{ lc($target_nick) } ||= { Flags => '' };
+			# set user mode and remember it, but ONLY if nick is registered and identified
+			my $user = $self->{resident}->get_user( $target_nick );
+			my $cuser = $channel->{Users}->{ lc($target_nick) } ||= { Flags => '' };
 			
 			my $unick = uc_irc($target_nick);
 			my $record = $ircd->{state}{users}{$unick};
 			
 			my $uchan = uc( nch($chan) );
-			if ($record && $record->{chans}) {
-				$user->{Flags} = $record->{chans}->{$uchan} || '';
-				if (!$user->{Flags}) { delete $channel->{Users}->{ lc($target_nick) }; }
+			if ($record && $record->{chans} && $user && $user->{Registered} && $user->{_identified}) {
+				$cuser->{Flags} = $record->{chans}->{$uchan} || '';
+				$self->{resident}->log_debug(4, "Permanently setting user $target_nick flags in channel $chan: " . ($cuser->{Flags} || 'n/a'));
+				if (!$cuser->{Flags}) { delete $channel->{Users}->{ lc($target_nick) }; }
 				$self->{resident}->save_channel($chan);
 			}
 		} # user mode
@@ -459,7 +461,7 @@ sub cmd_from_client {
 						} # identified
 					}
 					else {
-						$self->send_msg_to_user($nick, 'NOTICE', "Error: User '$target_nick' is already a server administrator.");
+						$self->send_msg_to_user($nick, 'NOTICE', "User '$target_nick' is already a server administrator.");
 					}
 				}
 				else {
@@ -491,7 +493,7 @@ sub cmd_from_client {
 						$self->send_msg_to_user($nick, 'NOTICE', "User '$target_nick' is no longer a server administrator.");
 					}
 					else {
-						$self->send_msg_to_user($nick, 'NOTICE', "Error: User '$target_nick' is not a server administrator.");
+						$self->send_msg_to_user($nick, 'NOTICE', "User '$target_nick' is not a server administrator.");
 					}
 				}
 			} # sop
@@ -584,15 +586,15 @@ sub sync_all_user_modes {
 			my $channel = $self->{resident}->get_channel($chan);
 			
 			if ($channel && $channel->{Registered}) {
-				foreach my $nick (keys %{$record->{users}}) {
+				foreach my $unick (keys %{$record->{users}}) {
+					my $nick = $self->{ircd}->{state}->{users}->{$unick}->{nick};
 					next if $nick =~ /^ChanServ$/i;
 					next if $single_nick && ($single_nick ne lc($nick));
 					
-					my $cur_mode = $record->{users}->{$nick};
-					$nick = lc($nick);
+					my $cur_mode = $record->{users}->{$unick};
 					
 					# private channel and user not in list?  kick!
-					if ($channel->{Private} && !$channel->{Users}->{$nick}) {
+					if ($channel->{Private} && !$channel->{Users}->{lc($nick)}) {
 						$self->log_debug(4, "Kicking user '$nick' out of private channel \#$chan");
 						$self->{ircd}->daemon_server_kick( nch($chan), $nick, "Private Channel" );
 					}
@@ -601,7 +603,7 @@ sub sync_all_user_modes {
 						$self->{ircd}->daemon_server_kick( nch($chan), $nick, "Banned" );
 					}
 					else {
-						my $target_mode = $channel->{Users}->{$nick} ? ($channel->{Users}->{$nick}->{Flags} || '') : '';
+						my $target_mode = $channel->{Users}->{lc($nick)} ? ($channel->{Users}->{lc($nick)}->{Flags} || '') : '';
 						
 						my $user = $self->{resident}->get_user($nick);
 						if ($user && $user->{Administrator}) { $target_mode = 'o'; }

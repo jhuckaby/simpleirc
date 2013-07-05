@@ -602,7 +602,7 @@ sub api_get_all_users {
 		
 		my $temp_user = $self->get_user($temp_nick) || {};
 		foreach my $key (keys %$temp_user) {
-			if (!defined($row->{$key})) { $row->{$key} = $temp_user->{$key}; }
+			if (!defined($row->{$key}) && ($key ne 'Password')) { $row->{$key} = $temp_user->{$key}; }
 		}
 		$row->{FullName} ||= '';
 		$row->{Registered} ||= 0;
@@ -649,6 +649,7 @@ sub api_user_create {
 	$user->{Password} = md5_hex( $json->{Password} . $user->{ID} );
 	$user->{Registered} = 1;
 	$user->{Status} = $json->{Status};
+	$user->{Administrator} = $json->{Administrator} || 0;
 	
 	$self->save_user($json->{Username});
 	
@@ -1082,6 +1083,7 @@ sub api_channel_get_users {
 		$row->{Flags} = $flags;
 		
 		my $temp_user = $self->get_user($temp_nick) || {};
+		$row->{DisplayUsername} = $temp_user->{DisplayUsername} || $temp_nick;
 		$row->{FullName} = $temp_user->{FullName} || '';
 		$row->{Registered} = $temp_user->{Registered} || 0;
 		if ($temp_user->{LastCmd}) { $row->{LastCmd} = $temp_user->{LastCmd}; }
