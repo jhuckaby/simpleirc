@@ -103,6 +103,7 @@ if ($config->{SSL}->{Enabled}) {
 
 # get our version info
 my $version = get_version();
+$resident->log_debug(1, 'SimpleIRC v' . $version->{Major} . '-' . $version->{Minor} . ' (' . $version->{Branch} . ') starting up');
 
 # construct IRC daemon object
 my $pocosi = POE::Component::Server::IRC::Simple->spawn(
@@ -147,6 +148,8 @@ if ($config->{WebServer}->{Enabled}) {
 		};
 	}
 	
+	$resident->log_debug(3, "Opening HTTP".($config->{WebServer}->{SSL} ? 'S (SSL)' : '')." socket listener on port " . $config->{WebServer}->{Port});
+	
 	POE::Component::Server::TCP->new(
 		Alias => "httpd",
 		Port => $config->{WebServer}->{Port},
@@ -183,6 +186,8 @@ if ($config->{WebServer}->{Enabled}) {
 	);
 	
 	if ($config->{WebServer}->{RedirectNonSSLPort}) {
+		$resident->log_debug(3, "Opening HTTP socket listener for non-SSL redirects on port " . $config->{WebServer}->{RedirectNonSSLPort});
+		
 		POE::Component::Server::TCP->new(
 			Alias => "httpd_nonssl_redirect",
 			Port => $config->{WebServer}->{RedirectNonSSLPort},
@@ -261,7 +266,7 @@ sub become_daemon {
 sub _start {
 	my ($kernel, $heap) = @_[KERNEL, HEAP];
 	
-	$resident->log_debug(1, "Starting up");
+	$resident->log_debug(1, "IRC server starting up");
 	
 	$kernel->sig(INT => "got_sig_int");
 	$kernel->sig(TERM => "got_sig_term");
@@ -283,17 +288,17 @@ sub _start {
 
 	# Start a listener on the 'standard' IRC port.
 	if ($config->{Port}) {
-		$resident->log_debug(3, "Opening socket listener on port " . $config->{Port});
+		$resident->log_debug(3, "Opening IRC socket listener on port " . $config->{Port});
 		$heap->{ircd}->add_listener( port => $config->{Port} ); # standard port
 	}
 	
 	if ($config->{SSL}->{Enabled}) {
-		$resident->log_debug(3, "Activating SSL on port " . $config->{SSL}->{Port});
+		$resident->log_debug(3, "Activating IRC SSL on port " . $config->{SSL}->{Port});
 		$heap->{ircd}->add_listener( port => $config->{SSL}->{Port}, usessl => 1 ); # for ssl
 	}
 	
 	if ($config->{BotAccess}->{Enabled}) {
-		$resident->log_debug(3, "Activating bot access on port " . $config->{BotAccess}->{Port});
+		$resident->log_debug(3, "Activating IRC bot access on port " . $config->{BotAccess}->{Port});
 		$heap->{ircd}->add_listener(
 			port => $config->{BotAccess}->{Port}, 
 			bindaddr => $config->{BotAccess}->{IP}, 
@@ -354,7 +359,11 @@ sub _default {
 	my ($kernel, $heap, $event, $args) = @_[KERNEL, HEAP, ARG0 .. $#_];
 	# local $Data::Dumper::Maxdepth = 1;
 	# local $Data::Dumper::Indent = 0;
-	$resident->log_debug(9, "Event: $event: " . join(', ', @$args));
+	
+	# Event: ircd_daemon_privmsg: jhuckabynick!~jhuckabyuser@c9ed02581a4ce137, NickServ, IDENTIFY 12345
+	if ($config->{Logging}->{LogPrivateMessages} || ($event ne 'ircd_daemon_privmsg')) {
+		$resident->log_debug(9, "Event: $event: " . join(', ', @$args));
+	}
 	
 	# $VAR1 = ['testnick',1,1365391392,'+i','~testuser','c9ed02581a4ce137','sample.irc.local','testuser'];
 	if ($event eq 'ircd_daemon_nick') {
@@ -1043,7 +1052,7 @@ sub _cmd_from_client {
 		
 		if ($input->{command} ne 'PING') {
 			
-			if ($self->{resident}->{config}->{Logging}->{LogPrivateMessages} || ($input->{raw_line} !~ /^(PRIVMSG|NS|CS)\s+\w+/)) {
+			if ($self->{resident}->{config}->{Logging}->{LogPrivateMessages} || ($input->{raw_line} !~ /^(PRIVMSG|NS|CS|IDENTIFY|REGISTER)\s+\w+/)) {
 				my $record = $self->{state}{conns}{$wheel_id};
 				$self->{resident}->log_event(
 					log => 'transcript',
