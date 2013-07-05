@@ -1,0 +1,4 @@
+Message Of the Day
+The contents of this file will be returned when anyone enters the '/motd' command to the console.
+Also, many IRC apps show this on all new user connections.
+This is a good place to put your server rules.

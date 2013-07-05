@@ -1,0 +1,3 @@
+My Cool IRC Server
+Enter some info about your server here.
+This will be returned when anyone enters the '/info' command to the console.

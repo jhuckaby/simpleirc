@@ -1,0 +1,20 @@
+HELP FOR SIMPLEIRC CHANSERV v1.0
+-
+This bot provides channel management services, so you can register official channels that persist, even if the server is restarted.  User privileges (i.e. user modes) such as voice, half-op, and op, are also stored, and re-applied to users that come back to your channel later.  As the channel founder, you will always be an "op" in your own channel.  Private channels only allow users who are on the xOP lists.
+-
+COMMANDS:
+-
+REGISTER <#channel> - Register a new public channel, of which you will be the founder.
+DROP <#channel> - Delete a channel, unregistering it from the system.
+ACCESS <#channel> (private|public) - Set channel access to private or public.
+-
+SHORTCUTS:
+-
+/CS - Shortcut for /msg ChanServ
+!VOP (add|remove|list) <nickname> - Add or remove user from auto-voice list for current channel.
+!HOP (add|remove|list) <nickname> - Add or remove user from auto-half-op list for current channel.
+!AOP (add|remove|list) <nickname> - Add or remove user from auto-op list for current channel.
+!SOP (add|remove|list) <nickname> - Add or remove user from server administrator list (server-wide, all channels).
+!SYNC - Synchronize user privileges (user modes) for channel.
+-
+End of Help

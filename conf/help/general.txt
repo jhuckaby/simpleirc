@@ -1,0 +1,17 @@
+HELP FOR SIMPLEIRC v1.0
+-
+SimpleIRC is a very simple IRC server supporting only a subset of the huge list of IRC commands.  It is based on the Perl module POE::Component::Server::IRC, and is open sourced under the MIT license.  More information can be found online at http://effectsoftware.com/simpleirc/
+-
+SimpleIRC has a built-in NickServ bot for managing nicks, and a built-in ChanServ for managing channels.  For further details, please send a "help" private message to either bot.  The server supports many standard IRC commands, with a few extras:
+-
+SPECIAL COMMANDS:
+-
+USERINFO <nickname> - Get information about a registered user.
+BROADCAST <message> - Broadcast a special server notice to all channels (admin only).
+RESTART <message> - Restart server with optional custom message (admin only).
+SHUTDOWN <message> - Stop server with optional custom message (admin only).
+RELOADCONFIG - Reload server configuration, if it has changed on disk (admin only).
+UPGRADE - Upgrade server to latest version in current branch (admin only).
+UPGRADE <branch> - Switch to another branch (i.e. "dev", "stable") and upgrade (admin only).
+-
+End of Help

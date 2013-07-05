@@ -1,0 +1,20 @@
+HELP FOR SIMPLEIRC NICKSERV v1.0
+-
+This bot provides nickname registration and management services, so you can reserve your nickname, secured with a password, and an e-mail address for recovery.  With SimpleIRC, your identity is tied to your nickname.  If you change your nickname, you are effectively logging out.  All channel privileges granted to you are also associated with your nickname, and will only be applied if you are logged in.
+-
+COMMANDS:
+-
+REGISTER <password> <email> - Registers your nickname, creating a user account.
+IDENTIFY <password> - Identifies you as the nickname owner, and logs you in.
+LOGOUT - Logs you out.  Will also remove all your channel privileges.
+RECOVER <email> - Sends password recovery information via e-mail.
+CONFIRM <code> <new_password> - Confirms password reset code and sets new password.
+DROP <password> - Deletes your user account associated with your nickname.
+DROP <nickname> - Deletes any user account (server administrators only).
+-
+SHORTCUTS:
+-
+/NS - Shortcut for /msg NickServ
+/IDENTIFY - Shortcut for /msg NickServ IDENTIFY
+-
+End of Help

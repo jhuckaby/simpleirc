@@ -1,0 +1,102 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<title>Loading...</title>
+	
+	<meta name="author" content="Joseph Huckaby">
+	<link rel="shortcut icon" href="/api/get_logo">
+	<link rel="stylesheet" href="css/style.css">
+	
+	<!-- BUILD: COMBINE_SCRIPT_START -->
+	<script src="js/jquery.min.js"></script>
+	<script src="js/md5.js"></script>
+	<script src="js/oop.js"></script>
+	<script src="js/ajax.js"></script>
+	<script src="js/cookie.js"></script>
+	<script src="js/tools.js"></script>
+	<script src="js/datetime.js"></script>
+	<script src="js/nav.js"></script>
+	<script src="js/Page.class.js"></script>
+	<script src="js/PageManager.class.js"></script>
+	<script src="js/dialog.js"></script>
+	<script src="js/growl.js"></script>
+	<script src="js/upload.js"></script>
+	<script src="js/app.js"></script>
+	<script src="js/pages/Base.class.js"></script>
+	<script src="js/pages/Home.class.js"></script>
+	<script src="js/pages/Login.class.js"></script>
+	<script src="js/pages/Channels.class.js"></script>
+	<script src="js/pages/Users.class.js"></script>
+	<script src="js/pages/Logs.class.js"></script>
+	<script src="js/pages/Settings.class.js"></script>
+	<script src="js/pages/MyAccount.class.js"></script>
+	<!-- BUILD: COMBINE_SCRIPT_END -->
+	
+	<script src="/api/config?callback=app.receiveConfig"></script>
+	
+</head>
+<body>
+	
+	<div id="d_growl_wrapper"></div>
+	
+	<div id="container">
+		<header>
+			<div id="d_header">
+				<div id="d_header_logo"></div>
+				<div id="d_header_title"></div>
+				<div id="d_header_user_bar">
+					Not logged in
+				</div>
+				<div class="clear"></div>
+			</div>
+		</header>
+		
+		<div id="d_message" class="message shade-light" style="display:none">
+			<div id="d_message_inner" class="message_inner"></div>
+		</div>
+		
+		<div class="tab_bar" style="display:none">
+			<div id="tab_Home" class="tab inactive" onMouseUp="Nav.go('Home')"><span class="content">Home</span></div>
+			<div id="tab_Channels" class="tab inactive" onMouseUp="Nav.go('Channels')"><span class="content">Channels</span></div>
+			<div id="tab_Users" class="tab inactive" style="display:none" onMouseUp="Nav.go('Users')"><span class="content">Users</span></div>
+			<div id="tab_Logs" class="tab inactive" style="display:none" onMouseUp="Nav.go('Logs')"><span class="content">Logs</span></div>
+			<div id="tab_Settings" class="tab inactive" style="display:none" onMouseUp="Nav.go('Settings')"><span class="content">Settings</span></div>
+			<div id="tab_MyAccount" class="tab inactive" onMouseUp="Nav.go('MyAccount')"><span class="content">My Account</span></div>
+			<div class="clear"></div>
+		</div>
+		
+		<div class="main">
+			<div id="page_Home" style="display:none"></div>
+			<div id="page_Channels" style="display:none"></div>
+			<div id="page_Users" style="display:none"></div>
+			<div id="page_Logs" style="display:none"></div>
+			<div id="page_Settings" style="display:none"></div>
+			<div id="page_MyAccount" style="display:none"></div>
+			<div id="page_Login" style="display:none"></div>
+		</div>
+		
+		<footer>
+			<div id="d_footer">
+				<div class="copyright" id="d_copyright">SimpleIRC &copy; 2013 EffectSoftware.com. Released under the MIT License.</div>
+				<div class="copyright" id="d_version" style="float:right"></div>
+				<div class="clear"></div>
+			</div>
+		</footer>
+
+	</div>
+	
+	<script>
+		$(document).ready( function() {
+			app.init();
+		} );
+		
+		window.addEventListener( "resize", function() {
+			// auto-resize if page has listener for this
+			app.handleResize();
+		}, false );
+	</script>
+	
+</body>
+</html>

@@ -1,0 +1,9 @@
+POE::Component::Server::IRC
+POE::Component::SSLify
+JSON::XS
+MIME::Lite
+MIME::Types
+LWP::UserAgent
+URI::Escape
+HTTP::Date
+IRC::Utils
