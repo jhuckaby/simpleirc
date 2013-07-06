@@ -404,7 +404,7 @@ sub cmd_from_client {
 		
 		my $channel = $self->{resident}->get_channel($chan) || 0;
 		if (!$channel || !$channel->{Registered}) {
-			$self->send_msg_to_user($nick, 'NOTICE', "Error: Can only use ChanServ commands in registered channels.");
+			$self->send_msg_to_channel($chan, 'NOTICE', "Error: Can only use ChanServ commands in registered channels.");
 			return;
 		}
 		
@@ -419,18 +419,18 @@ sub cmd_from_client {
 		if (($user_stub->{Flags} =~ /h/) && ($msg =~ /^\!vop\s+/i)) { $is_op = 1; }
 		
 		if (!$is_op) {
-			$self->send_msg_to_user($nick, 'NOTICE', "Error: You are not an op in \#$chan, so you cannot use ChanServ commands.");
+			$self->send_msg_to_channel($chan, 'NOTICE', "Error: You are not an op in \#$chan, so you cannot use ChanServ commands.");
 			return;
 		}
 		
-		if ($msg =~ /^\!([vhas])op\s+(add|remove|del)\s+(\w+)$/i) {
+		if ($msg =~ /^\!([vhas])op\s+(add|remove|del)\s+(\w+)/i) {
 			my ($flag, $cmd, $target_nick) = ($1, $2, $3);
 			$flag = lc($flag);
 			$cmd = lc($cmd); $cmd =~ s/del/remove/;
 			
 			my $user = $self->{resident}->get_user($target_nick) || 0;
 			if (!$user || !$user->{Registered}) {
-				$self->send_msg_to_user($nick, 'NOTICE', "Error: Can only use xOP commands on registered users.");
+				$self->send_msg_to_channel($chan, 'NOTICE', "Error: Can only use xOP commands on registered users.");
 				return;
 			}
 			
@@ -441,14 +441,14 @@ sub cmd_from_client {
 			if ($flag eq 's') {
 				# super-admin
 				if (!$self->{resident}->is_admin($nick)) {
-					$self->send_msg_to_user($nick, 'NOTICE', "Error: Only administrators may use the SOP command.");
+					$self->send_msg_to_channel($chan, 'NOTICE', "Error: Only administrators may use the SOP command.");
 					return;
 				}
 				if ($cmd eq 'add') {
 					if (!$user->{Administrator}) {
 						$user->{Administrator} = 1;
 						$self->{resident}->save_user($target_nick);
-						$self->send_msg_to_user($nick, 'NOTICE', "User '$target_nick' is now a server administrator.");
+						$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is now a server administrator.");
 						
 						if ($user->{_identified}) {
 							$self->schedule_event( '', {
@@ -461,7 +461,7 @@ sub cmd_from_client {
 						} # identified
 					}
 					else {
-						$self->send_msg_to_user($nick, 'NOTICE', "User '$target_nick' is already a server administrator.");
+						$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is already a server administrator.");
 					}
 				}
 				else {
@@ -490,10 +490,10 @@ sub cmd_from_client {
 							} );
 						} # identified
 						
-						$self->send_msg_to_user($nick, 'NOTICE', "User '$target_nick' is no longer a server administrator.");
+						$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is no longer a server administrator.");
 					}
 					else {
-						$self->send_msg_to_user($nick, 'NOTICE', "User '$target_nick' is not a server administrator.");
+						$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is not a server administrator.");
 					}
 				}
 			} # sop
