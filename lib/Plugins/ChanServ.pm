@@ -419,7 +419,7 @@ sub cmd_from_client {
 		if (($user_stub->{Flags} =~ /h/) && ($msg =~ /^\!vop\s+/i)) { $is_op = 1; }
 		
 		if (!$is_op) {
-			$self->send_msg_to_channel($chan, 'NOTICE', "Error: You are not an op in \#$chan, so you cannot use ChanServ commands.");
+			$self->send_msg_to_channel($chan, 'NOTICE', "Error: You are not an op in $chan, so you cannot use ChanServ commands.");
 			return;
 		}
 		
