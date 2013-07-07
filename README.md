@@ -1,7 +1,19 @@
 SimpleIRC
 =========
 
-SimpleIRC is an easy-to-install and easy-to-use IRC server, written in Perl.  It was designed around the idea that setting up and running an IRC server should be simple.  SimpleIRC should run on any modern Linux server, and comes with a full web interface for administration (although you can also admin the server from the IRC console if you want).
+SimpleIRC is an easy-to-install and easy-to-use IRC server, written in Perl.  It was designed around the idea that setting up and running an IRC server should be simple.  SimpleIRC should run on any modern Linux server, and comes with a full web interface for administration (although you can also admin the server from the IRC console if you want).  SimpleIRC is built on the awesome [POE::Component::Server::IRC](http://search.cpan.org/dist/POE-Component-Server-IRC/) framework.
+
+Features at a glance:
+
+* Single-command install on most flavors of Linux.
+* Built-in web interface for administration.
+* Full SSL support, in both the IRC and embedded web server.
+* Easy upgrades, from the Web UI or within IRC.
+* Log archival and retrieval system.
+* User modes are auto-remembered for registered users.
+* Public or private channels (with invites and permanent users).
+* Administrators can broadcast notices to all channels.
+* NickServ and ChanServ service bots included.
 
 ## Single-Command Install
 
@@ -17,11 +29,15 @@ This will install the latest stable version of SimpleIRC.  Change the word "stab
 
 After installation, you will be provided instructions for logging in as an administrator.
 
-## Differences from IRC
+## Differences from "Standard" IRC
 
-If you have used IRC before, then you may notice that SimpleIRC does things a little bit differently.  While it still supports the IRC protocol, and should work with nearly all IRC client applications, there are indeed some key differences from "normal" IRC.
+If you have used IRC before, then you may notice that SimpleIRC does things a little bit differently.  While it still supports the IRC protocol, and should work with nearly all IRC client applications, there are indeed some key differences from "standard" IRC.
 
-The most important change is, _your nickname is your identity_.  SimpleIRC completely ignores the "username" you log in with, and relies solely on your nickname for identification.  If you change your nick while logged in, you have effectively logged out and logged in as a new user, and all your privileges (modes) are instantly changed to reflect that.  If you have Ops in a channel and change your nick, your Ops are taken away.  If you nick back and re-identify, your original channel modes are restored.
+The most important difference is, _your nickname is your identity_.  SimpleIRC completely ignores the IRC "username" you log in with, and relies solely on your nickname for identification.  If you change your nick while logged in, you have effectively logged out and logged in as a new user, and all your privileges (modes) are instantly changed to reflect that.  If you have Ops in a channel and change your nick, your Ops are taken away.  If you nick back and re-identify, your original modes are restored.
+
+SimpleIRC only implements a few select user modes, to keep things simple.  Voice (+v), Half-Op (+h), and Op (+o) are the only modes supported in channels.  There is the concept of a server administrator, which gets server-wide +o (OPER) and +o in all channels too, but appears to others as a standard Op.
+
+You can optionally configure your to require nicks and/or channels to be registered.  You can also lock it down so only server administrators can create new channels, and even make them private (invite only).  Users added to channels (given a mode, or added in the web UI) are permanently invited.
 
 ## Copyright and Legal
 
