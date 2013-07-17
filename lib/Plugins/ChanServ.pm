@@ -714,6 +714,11 @@ sub delete_channel {
 		# otherwise, just drop everyone's privs incl. founder (except sops)
 		$channel->{Users} = {};
 		$self->sync_all_user_modes($chan, '');
+		
+		# always have chanserv leave tho
+		my $cnick = 'chanserv';
+		$self->log_debug(9, "Kicking $cnick out of \#$chan");
+		$self->{ircd}->daemon_server_kick( nch($chan), $cnick, "Channel has been deleted." );
 	}
 	
 	# release channel

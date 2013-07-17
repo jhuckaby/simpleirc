@@ -14,6 +14,8 @@ Features at a glance:
 * Public or private channels (with invites and permanent users).
 * Administrators can broadcast notices to all channels.
 * NickServ and ChanServ service bots included.
+* Supports both channel and server-wide bans.
+* Database implemented with simple JSON files on disk.
 
 ## Single-Command Install
 
@@ -35,7 +37,7 @@ If you have used IRC before, then you may notice that SimpleIRC does things a li
 
 The most important difference is, _your nickname is your identity_.  SimpleIRC completely ignores the IRC "username" you log in with, and relies solely on your nickname for identification.  If you change your nick while logged in, you have effectively logged out and logged in as a new user, and all your privileges (modes) are instantly changed to reflect that.  If you have Ops in a channel and change your nick, your Ops are taken away.  If you nick back and re-identify, your original modes are restored.
 
-SimpleIRC only implements a few select user modes, to keep things simple.  Voice (+v), Half-Op (+h), and Op (+o) are the only modes supported in channels.  There is the concept of a server administrator, which gets server-wide +o (OPER) and +o in all channels too, but appears to others as a standard Op.
+SimpleIRC only implements a few select user modes, to keep things simple.  Voice (+v), Half-Op (+h), and Op (+o) are the only modes supported in channels.  There is the concept of a server administrator, which gets server-wide +o (O-Line) and +o in all channels too, but appears to others as a standard Op.
 
 You can optionally configure your to require nicks and/or channels to be registered.  You can also lock it down so only server administrators can create new channels, and even make them private (invite only).  Users added to channels (given a mode, or added in the web UI) are permanently invited.
 
