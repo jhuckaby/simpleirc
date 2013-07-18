@@ -422,15 +422,14 @@ sub warn_handler {
 			if ($direction =~ m@<@) { $self->{ircd}->{total_bytes_in} += length($data); }
 			else { $self->{ircd}->{total_bytes_out} += length($data); }
 		}
+		
+		if ($self->{config}->{Logging}->{EchoToConsole}) {
+			$self->log_event( log => 'debug', package => $package_name, level => 9, msg => $msg );
+		}
 	}
 	elsif ($self->{config}->{Logging}->{DebugLevel} >= 9) {
-		$self->log_event(
-			log => 'debug',
-			package => $package_name,
-			level => 9,
-			msg => $msg
-		);
-	}	
+		$self->log_event( log => 'debug', package => $package_name, level => 9, msg => $msg );
+	}
 }
 
 sub log_event {

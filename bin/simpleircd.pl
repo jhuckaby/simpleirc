@@ -725,6 +725,94 @@ sub _daemon_cmd_who {
 	return $ref;
 }
 
+sub _daemon_cmd_topic {
+	# overriding POE::Component::Server::IRC::_daemon_cmd_topic
+	# ugly hack to fix format of '333' command for apps like KiwiIRC
+	# Adding 'FIX' param to force it to become the "trailing" text (after the colon)
+	# and the actual epoch date to come before it, like this:
+	#   :sample.irc.local 333 jhuckabynick #myroom ChanServ!ChanServ@sample.irc.local 1374122157 :FIX
+    my $self   = shift;
+    my $nick   = shift || return;
+    my $server = $self->server_name();
+    my $ref    = [ ];
+    my $args   = [@_];
+    my $count  = @$args;
+
+    SWITCH:{
+        if (!$count) {
+            push @$ref, ['461', 'TOPIC'];
+            last SWITCH;
+        }
+        if (!$self->state_chan_exists($args->[0])) {
+            push @$ref, ['403', $args->[0]];
+            last SWITCH;
+        }
+        if ($self->state_chan_mode_set($args->[0], 's')
+            && !$self->state_is_chan_member($nick, $args->[0])) {
+            push @$ref, ['442', $args->[0]];
+            last SWITCH;
+        }
+        my $chan_name = $self->_state_chan_name($args->[0]);
+        if ($count == 1
+                and my $topic = $self->state_chan_topic($args->[0])) {
+            push @$ref, {
+                prefix  => $server,
+                command => '332',
+                params  => [$nick, $chan_name, $topic->[0]],
+            };
+            push @$ref, {
+                prefix  => $server,
+                command => '333',
+                params  => [$nick, $chan_name, @{ $topic }[1..2], "FIX"], # ADDED 'FIX' HERE
+            };
+            last SWITCH;
+        }
+        if ($count == 1) {
+            push @$ref, {
+                prefix  => $server,
+                command => '331',
+                params  => [$nick, $chan_name, 'No topic is set'],
+            };
+            last SWITCH;
+        }
+        if (!$self->state_is_chan_member($nick, $args->[0])) {
+            push @$ref, ['442', $args->[0]];
+            last SWITCH;
+        }
+        if ($self->state_chan_mode_set($args->[0], 't')
+        && !$self->state_is_chan_op($nick, $args->[0])) {
+            push @$ref, ['482', $args->[0]];
+            last SWITCH;
+        }
+        my $record = $self->{state}{chans}{uc_irc($args->[0])};
+        my $topic_length = $self->server_config('TOPICLEN');
+        if (length $args->[0] > $topic_length) {
+            $args->[1] = substr $args->[0], 0, $topic_length;
+        }
+        if ($args->[1] eq '') {
+            delete $record->{topic};
+        }
+        else {
+            $record->{topic} = [
+                $args->[1],
+                $self->state_user_full($nick),
+                time,
+            ];
+        }
+        $self->_send_output_to_channel(
+            $args->[0],
+            {
+                prefix  => $self->state_user_full($nick),
+                command => 'TOPIC',
+                params  => [$chan_name, $args->[1]],
+            },
+        );
+    }
+
+    return @$ref if wantarray;
+    return $ref;
+}
+
 sub _daemon_cmd_help {
 	# custom command, returns generic help text to user
 	my $ircd = shift;
