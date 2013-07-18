@@ -27,6 +27,20 @@ chdir( $base_dir );
 
 my $version = get_version();
 
+my $standard_binary_paths = {
+	'/bin' => 1,
+	'/usr/bin' => 1,
+	'/usr/local/bin' => 1,
+	'/sbin' => 1,
+	'/usr/sbin' => 1,
+	'/usr/local/sbin' => 1,
+	'/opt/bin' => 1,
+	'/opt/local/bin' => 1
+};
+foreach my $temp_bin_path (split(/\:/, $ENV{'PATH'} || '')) {
+	if ($temp_bin_path) { $standard_binary_paths->{$temp_bin_path} = 1; }
+}
+
 print "\nInstalling SimpleIRC " . $version->{Major} . '-' . $version->{Minor} . " (" . $version->{Branch} . ")...\n\n";
 
 # Have cpanm install all our required modules, if we need them
@@ -38,7 +52,11 @@ foreach my $module (split(/\n/, load_file("$base_dir/install/perl-modules.txt"))
 			print "Perl module $module is installed.\n";
 		}
 		else {
-			system("cpanm -n $module");
+			my $cpanm_bin = find_bin("cpanm");
+			if (!$cpanm_bin) {
+				die "\nERROR: Could not locate 'cpanm' binary in the usual places.  Installer cannot continue.\n\n";
+			}
+			system("$cpanm_bin -n $module");
 			my $result = system($cmd);
 			if ($result != 0) {
 				die "\nERROR: Failed to install Perl module: $module.  Please try to install it manually, then run this installer again.\n\n";
@@ -205,6 +223,21 @@ sub exec_shell {
 	my $quiet = shift || 0;
 	if (!$quiet) { print "Executing command: $cmd\n"; }
 	print `$cmd 2>&1`;
+}
+
+sub find_bin {
+	# locate binary executable on filesystem
+	# look in the usual places, also PATH
+	my $bin_name = shift;
+	
+	foreach my $parent_path (keys %$standard_binary_paths) {
+		my $bin_path = $parent_path . '/' . $bin_name;
+		if ((-e $bin_path) && (-x $bin_path)) {
+			return $bin_path;
+		}
+	}
+	
+	return '';
 }
 
 sub load_file {

@@ -30,11 +30,11 @@ echo ""
 
 if which yum >/dev/null 2>&1 ; then 
 	# Linux prereq install
-	yum -y install perl wget gzip zip gcc gcc-c++ libstdc++-devel pkgconfig curl make openssl openssl-devel openssl-perl perl-libwww-perl perl-Time-HiRes perl-JSON perl-ExtUtils-MakeMaker perl-TimeDate perl-MailTools perl-Test-Simple perl-MIME-Types perl-MIME-Lite
+	yum -y install perl wget gzip zip gcc gcc-c++ libstdc++-devel pkgconfig curl make openssl openssl-devel openssl-perl perl-libwww-perl perl-Time-HiRes perl-JSON perl-ExtUtils-MakeMaker perl-TimeDate perl-MailTools perl-Test-Simple perl-MIME-Types perl-MIME-Lite || exit 1
 else
 	if which apt-get >/dev/null 2>&1 ; then
 		# Ubuntu prereq install
-		apt-get -y install perl wget gzip zip build-essential libssl-dev pkg-config libwww-perl libjson-perl 
+		apt-get -y install perl wget gzip zip build-essential libssl-dev pkg-config libwww-perl libjson-perl || exit 1
 	else
 		echo ""
 		echo "ERROR: This server is not supported by the SimpleIRC auto-installer, as it does not have 'yum' nor 'apt-get'."
@@ -58,15 +58,15 @@ fi
 mkdir -p /opt
 cd /opt
 if which curl >/dev/null 2>&1 ; then 
-	curl -O "http://effectsoftware.com/software/simpleirc/$SIMPLEIRC_TARBALL"
+	curl -O "http://effectsoftware.com/software/simpleirc/$SIMPLEIRC_TARBALL" || exit 1
 else
-	wget "http://effectsoftware.com/software/simpleirc/$SIMPLEIRC_TARBALL"
+	wget "http://effectsoftware.com/software/simpleirc/$SIMPLEIRC_TARBALL" || exit 1
 fi
-tar zxf $SIMPLEIRC_TARBALL
+tar zxf $SIMPLEIRC_TARBALL || exit 1
 rm -f $SIMPLEIRC_TARBALL
 
 chmod 775 /opt/simpleirc/install/*
-/opt/simpleirc/install/install.pl
+/opt/simpleirc/install/install.pl || exit 1
 
 # Start service
-/etc/init.d/simpleircd start
+/etc/init.d/simpleircd start || exit 1
