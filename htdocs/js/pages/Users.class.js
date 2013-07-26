@@ -184,6 +184,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Users", {
 		app.hideProgress();
 		app.showMessage('success', "The user was saved successfully.");
 		app.api.mod_touch( 'get_user_info', 'get_all_users' );
+		window.scrollTo( 0, 0 );
 		
 		// if we edited ourself, update header
 		if (this.args.username == app.username) {

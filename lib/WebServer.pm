@@ -809,6 +809,8 @@ sub api_channel_create {
 	$channel->{Users} = { lc($username) => { Flags => 'o' } };
 	$channel->{Topic} = $json->{Topic} || '';
 	$channel->{Private} = $json->{Private} || 0;
+	$channel->{URL} = $json->{URL} || '';
+	$channel->{JoinNotice} = $json->{JoinNotice} || '';
 	
 	$self->save_channel($chan);
 		
@@ -949,6 +951,10 @@ sub api_channel_update {
 		# reset channel invite flag accordingly
 		$self->{ircd}->daemon_server_mode($chan, ($channel->{Private} ? '+' : '-') . 'i');
 	}
+	
+	# other channel params
+	$channel->{URL} = $json->{URL};
+	$channel->{JoinNotice} = $json->{JoinNotice};
 	
 	# sync all user modes
 	$chanserv->sync_all_user_modes( $chan, '' );

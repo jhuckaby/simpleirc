@@ -88,6 +88,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.MyAccount", {
 		app.hideProgress();
 		app.showMessage('success', "Your account settings were updated successfully.");
 		$('#fe_ma_password').val('');
+		window.scrollTo( 0, 0 );
 		
 		app.user = resp.User;
 		app.updateHeaderInfo();

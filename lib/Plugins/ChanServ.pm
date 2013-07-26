@@ -226,6 +226,21 @@ sub IRCD_daemon_join {
 			$ircd->daemon_server_mode($chan, '+o', $nick);
 		}
 		
+		# channel url
+		if ($channel->{URL}) {
+			my $route_id = $self->{ircd}->_state_user_route($nick);
+			if ($route_id && ($route_id ne 'spoofed')) {
+				$self->{ircd}->_send_output_to_client( $route_id, { 
+					prefix => 'services', 
+					command => 328, # RPL_CHANNEL_URL
+					params => [$nick, nch($chan), $channel->{URL}] 
+				} );
+			}
+		}
+		if ($channel->{JoinNotice}) {
+			$self->send_msg_to_user($nick, 'NOTICE', nch($chan) . " " . $channel->{JoinNotice});
+		}
+		
 		# set topic if user is first in the channel
 		my $uchan = uc_irc( nch($chan) );
 		my $record = $ircd->{state}{chans}{$uchan};
@@ -677,6 +692,9 @@ sub run_daily_maintenance {
 sub set_channel_topic {
 	# set topic in channel
 	my ($self, $chan, $topic) = @_;
+	
+	$topic = trim($topic);
+	$topic =~ s/\n/ /g;
 	
 	my $crecord = $self->{ircd}->{state}{chans}{uc_irc(nch($chan))};
 	if (!$crecord) { return 0; }

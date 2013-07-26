@@ -39,7 +39,7 @@ Class.create( 'AppStr.PageManager', {
 		return page;
 	},
 	
-	activate: function(id, args) {
+	activate: function(id, old_id, args) {
 		// send activate event to page by id (i.e. Plugin Name)
 		$('#page_'+id).show();
 		$('#tab_'+id).addClass('active');
@@ -47,6 +47,13 @@ Class.create( 'AppStr.PageManager', {
 		page.active = true;
 				
 		if (!args) args = [];
+		
+		// if we are navigating here from a different page, AND the new sub mismatches the old sub, clear the page html
+		var new_sub = args.sub || '';
+		if (old_id && (id != old_id) && (typeof(page._old_sub) != 'undefined') && (new_sub != page._old_sub) && page.div) {
+			page.div.html('');
+		}
+		
 		if (!isa_array(args)) args = [ args ]; // for the apply()
 				
 		var result = page.onActivate.apply(page, args);
@@ -63,6 +70,9 @@ Class.create( 'AppStr.PageManager', {
 			$('#tab_'+id).removeClass('active');
 			// $('#d_message').hide();
 			page.active = false;
+			
+			// if page has args.sub, save it for clearing html on reactivate, if page AND sub are different
+			if (page.args) page._old_sub = page.args.sub || '';
 		}
 		return result;
 	},
@@ -80,7 +90,7 @@ Class.create( 'AppStr.PageManager', {
 		
 		window.scrollTo( 0, 0 );
 		
-		var result = this.activate(id, args);
+		var result = this.activate(id, old_id, args);
 		if (!result) {
 			// new page has rejected activation, probably because a login is required
 			// un-hide previous page div, but don't call activate on it

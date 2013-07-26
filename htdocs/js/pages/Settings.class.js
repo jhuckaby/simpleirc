@@ -545,6 +545,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 						// user cancelled server restart, but we still successfully saved the config
 						// update local client config
 						app.hideProgress();
+						window.scrollTo( 0, 0 );
 						app.receiveConfig( save_config_resp );
 						app.updateFromConfig();
 						self.config = save_config_resp.Config;
@@ -556,6 +557,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 				// no server restart necessary
 				// update local client config
 				app.hideProgress();
+				window.scrollTo( 0, 0 );
 				app.receiveConfig( save_config_resp );
 				app.updateFromConfig();
 				self.config = save_config_resp.Config;
@@ -657,6 +659,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 		}, 
 		function(resp, tx) {
 			app.hideProgress();
+			window.scrollTo( 0, 0 );
 			app.showMessage('success', "Text files saved successfully.");
 		} );
 	},

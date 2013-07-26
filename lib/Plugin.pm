@@ -41,11 +41,14 @@ sub send_msg_to_user {
 	
 	$self->log_debug(9, "Sending $type to $nick: $msg");
 	
-	$self->{ircd}->_send_output_to_client( $route_id, {
-		prefix  => $package,
-		command => $type,
-		params  => [ $nick, $msg ]
-	});
+	foreach my $line (split(/\n/, $msg)) {
+		next unless $line =~ /\S/;
+		$self->{ircd}->_send_output_to_client( $route_id, {
+			prefix  => $package,
+			command => $type,
+			params  => [ $nick, $line ]
+		});
+	}
 	
 	$self->{resident}->log_event(
 		log => 'transcript',

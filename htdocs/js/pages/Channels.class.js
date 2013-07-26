@@ -61,7 +61,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 		this.div.html( html );
 		
 		setTimeout( function() {
-			$('#fe_ec_title').focus();
+			$('#fe_ec_name').focus();
 		}, 1 );
 	},
 	
@@ -159,6 +159,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 	save_channel_finish: function(resp, tx) {
 		// new channel created successfully
 		app.hideProgress();
+		window.scrollTo( 0, 0 );
 		app.showMessage('success', "The channel was saved successfully.");
 		app.api.mod_touch( 'channel_get', 'get_all_channels' );
 	},
@@ -197,23 +198,33 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 		if (channel_name && !channel_name.match(/^\#/)) channel_name = '#' + channel_name;
 		
 		// id
-		html += get_form_table_row( 'Channel ID', '<input type="text" id="fe_ec_name" size="30" placeholder="#mychannel" value="'+escape_text_field_value(channel_name)+'"/>' );
+		html += get_form_table_row( 'Channel ID', '<input type="text" id="fe_ec_name" size="20" placeholder="#mychannel" value="'+escape_text_field_value(channel_name)+'"/>' );
 		html += get_form_table_caption( "Enter an identifer for the channel, e.g. \"#mychannel\".  After creating the channel this cannot be changed.  Case insensitive.");
 		html += get_form_table_spacer();
 		
 		// founder
-		html += get_form_table_row( 'Founder', '<input type="text" id="fe_ec_founder" size="30" value="'+escape_text_field_value(channel.Founder)+'"/>' );
+		html += get_form_table_row( 'Founder', '<input type="text" id="fe_ec_founder" size="20" value="'+escape_text_field_value(channel.Founder)+'"/>' );
 		html += get_form_table_caption( "Specify the nickname of the channel's 'founder' (i.e. owner), who will always have op privileges and can manage/delete the channel.");
 		html += get_form_table_spacer();
 		
-		// topic
-		html += get_form_table_row( 'Topic', '<input type="text" id="fe_ec_topic" size="50" value="'+escape_text_field_value(channel.Topic)+'"/>' );
-		html += get_form_table_caption( "Optionally enter a topic (description) for the channel.  This can also be changed in IRC by channel ops.");
+		// url
+		html += get_form_table_row( 'URL', '<input type="text" id="fe_ec_url" size="50" value="'+escape_text_field_value(channel.URL)+'"/>' );
+		html += get_form_table_caption( "Optionally enter a URL for the channel.  Some IRC clients show this to users who join.");
 		html += get_form_table_spacer();
 		
 		// access
 		html += get_form_table_row( 'Access', '<select id="fe_ec_access">' + render_menu_options([['0','Public'], ['1','Private']], (channel.Private == 1) ? 1 : 0) + '</select>' );
 		html += get_form_table_caption( "Select either 'Public' (all users can join), or 'Private' (users must be added manually).");
+		html += get_form_table_spacer();
+		
+		// topic
+		html += get_form_table_row( 'Topic', '<textarea id="fe_ec_topic" style="width:600px;" rows="3">'+escape_textarea_field_value(channel.Topic)+'</textarea>' );
+		html += get_form_table_caption( "Optionally enter a topic (description) for the channel.  This can also be changed in IRC by channel ops.");
+		html += get_form_table_spacer();
+		
+		// join notice
+		html += get_form_table_row( 'Join Notice', '<textarea id="fe_ec_joinnotice" style="width:600px;" rows="3">'+escape_textarea_field_value(channel.JoinNotice)+'</textarea>' );
+		html += get_form_table_caption( "Optionally enter a join notice for the channel.  The ChanServ bot will send this to all users who join the channel.");
 		html += get_form_table_spacer();
 		
 		return html;
@@ -224,6 +235,8 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 		var channel = {
 			Name: trim($('#fe_ec_name').val().toLowerCase().replace(/\W+/g, '')),
 			Topic: trim($('#fe_ec_topic').val()),
+			URL: trim($('#fe_ec_url').val()),
+			JoinNotice: trim($('#fe_ec_joinnotice').val()),
 			Private: parseInt( $('#fe_ec_access').val(), 10 ),
 			Founder: $('#fe_ec_founder').val()
 		};
@@ -259,7 +272,12 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 		
 		// html += '<div style="padding:5px 15px 15px 15px;">';
 		html += '<div style="padding:20px 20px 30px 20px">';
-		html += '<div class="subtitle">Channel List</div>';
+		
+		html += '<div class="subtitle">';
+			html += 'Channel List';
+			html += '<div class="subtitle_widget"><span class="link" onMouseUp="$P().refresh_channel_list()"><b>Refresh List</b></span></div>';
+			html += '<div class="clear"></div>';
+		html += '</div>';
 		
 		html += this.getPaginatedTable( resp, cols, 'channel', function(channel, idx) {
 			var status = '(None)';
@@ -291,6 +309,12 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 		html += '</div>'; // sidebar tabs
 		
 		this.div.html( html );
+	},
+	
+	refresh_channel_list: function() {
+		// refresh user list
+		app.api.mod_touch( 'get_all_channels' );
+		this.gosub_list(this.args);
 	},
 	
 	gosub_users: function(args) {
@@ -649,7 +673,6 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 	
 	onDeactivate: function() {
 		// called when page is deactivated
-		// this.div.html( '' );
 		return true;
 	}
 	
