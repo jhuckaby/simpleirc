@@ -812,6 +812,10 @@ sub api_channel_create {
 	$channel->{URL} = $json->{URL} || '';
 	$channel->{JoinNotice} = $json->{JoinNotice} || '';
 	
+	foreach my $key (keys %$json) {
+		if ($key =~ /^Guest\w+$/) { $channel->{$key} = $json->{$key}; }
+	}
+	
 	$self->save_channel($chan);
 		
 	$self->{ircd}->yield('daemon_cmd_join', 'ChanServ', nch($chan));
@@ -955,6 +959,10 @@ sub api_channel_update {
 	# other channel params
 	$channel->{URL} = $json->{URL};
 	$channel->{JoinNotice} = $json->{JoinNotice};
+	
+	foreach my $key (keys %$json) {
+		if ($key =~ /^Guest\w+$/) { $channel->{$key} = $json->{$key}; }
+	}
 	
 	# sync all user modes
 	$chanserv->sync_all_user_modes( $chan, '' );

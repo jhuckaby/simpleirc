@@ -511,6 +511,7 @@ use POE::Component::Server::IRC;
 use POE::Component::Server::IRC::Common qw(chkpasswd);
 use POE::Component::Server::IRC::Plugin qw(:ALL);
 use base qw( POE::Component::Server::IRC );
+use Time::HiRes; # not importing time() to be safe, calling explicitly when i need it
 
 use Tools;
 use VersionInfo;
@@ -1133,13 +1134,26 @@ sub _cmd_from_client {
 	# overriding POE::Component::Server::IRC::_cmd_from_client
 	# so we can log everything, and for plugins to hook it
 	my ($self, $wheel_id, $input) = @_;
-	my $result = POE::Component::Server::IRC::_cmd_from_client(@_);
 	
 	if ($input->{raw_line}) {
 		my $nick = $self->_client_nickname($wheel_id);
 		
+		# pass command along to all plugins (i.e. NickServ)
+		my $plugins = $self->plugin_list();
+		foreach my $plugin_name (keys %$plugins) {
+			my $plugin = $plugins->{$plugin_name};
+			if ($plugin->can('cmd_from_client')) {
+				my $result = undef;
+				eval { $result = $plugin->cmd_from_client($nick, $input); };
+				if ($@) { $self->{resident}->log_error( "$plugin_name Crash in cmd_from_client: $@" ); }
+				if (!$result) {
+					$self->{resident}->log_debug(9, "$plugin_name: Aborted processing on $nick: " . $input->{raw_line});
+					return undef;
+				}
+			} # plugin has cmd_from_client
+		} # foreach plugin
+		
 		if ($input->{command} ne 'PING') {
-			
 			if ($self->{resident}->{config}->{Logging}->{LogPrivateMessages} || ($input->{raw_line} !~ /^(PRIVMSG|NS|CS|IDENTIFY|REGISTER)\s+\w+/)) {
 				my $record = $self->{state}{conns}{$wheel_id};
 				$self->{resident}->log_event(
@@ -1153,7 +1167,7 @@ sub _cmd_from_client {
 				my $user = $self->{resident}->get_user($nick, 0);
 				if ($user) {
 					$user->{LastCmd} = {
-						When => time(),
+						When => Time::HiRes::time(),
 						Raw => $input->{raw_line}
 					};
 				}
@@ -1162,18 +1176,9 @@ sub _cmd_from_client {
 			} # okay to log
 		} # not a ping
 		
-		# pass command along to all plugins (i.e. NickServ)
-		my $plugins = $self->plugin_list();
-		foreach my $plugin_name (keys %$plugins) {
-			my $plugin = $plugins->{$plugin_name};
-			if ($plugin->can('cmd_from_client')) {
-				eval { $plugin->cmd_from_client($nick, $input); };
-				if ($@) { $self->{resident}->log_error( "$plugin_name Crash in cmd_from_client: $@" ); }
-			}
-		}
 	} # raw_line
 	
-	return $result;
+	return POE::Component::Server::IRC::_cmd_from_client(@_);
 }
 
 #	sub IRCD_raw_input {

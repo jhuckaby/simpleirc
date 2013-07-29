@@ -10,6 +10,7 @@ use POE::Component::Server::IRC::Plugin qw(:ALL);
 use IRC::Utils ':ALL';
 use Data::Dumper;
 use Digest::MD5 qw/md5_hex/;
+use Time::HiRes; # not importing time() to be safe, calling explicitly when i need it
 use Tools;
 
 use Plugin;
@@ -33,7 +34,7 @@ sub PCSI_register {
 		h => 'half-op',
 		o => 'operator'
 	};
-
+	
 	$ircd->plugin_register($self, 'SERVER', qw(daemon_privmsg daemon_join daemon_nick daemon_mode daemon_topic));
 	$ircd->yield(
 		'add_spoofed_nick',
@@ -49,6 +50,19 @@ sub PCSI_register {
 		my ($this, $nick, $cmd) = @_;
 		$self->IRCD_daemon_privmsg( $ircd, \$nick, \"ChanServ", \$cmd, [] );
 	} );
+	
+	# load bad word list and compile into regexp
+	my $words = [];
+	foreach my $line (split(/\n/, load_file('conf/bad_words.txt') || '')) {
+		if ($line =~ /\S/) {
+			$line = trim($line);
+			$line =~ s/([^\w\s])/\\$1/g;
+			push @$words, $line;
+		}
+	}
+	if (scalar @$words) {
+		$self->{bad_word_match} = "\\b(" . join("|", @$words) . ")s?\\b";
+	}
 	
 	return 1;
 }
@@ -240,7 +254,7 @@ sub IRCD_daemon_join {
 				next unless $line =~ /\S/;
 				$self->{ircd}->_send_output_to_client( $route_id, { 
 					prefix => $self->{ircd}->state_user_full('ChanServ'), 
-					command => 'NOTICE',
+					command => 'PRIVMSG',
 					params => [nch($chan), $line] 
 				} );
 			}
@@ -342,6 +356,7 @@ sub IRCD_daemon_mode {
 			
 			$ban_target =~ /^(.+)\@(.+)$/;
 			my ($ban_target_user, $ban_target_ip) = ($1, $2);
+			if ($ban_target_user !~ /\!/) { $ban_target_user .= '!*'; }
 			
 			if (!find_object( $channel->{Bans}, { TargetUser => $ban_target_user, TargetIP => $ban_target_ip } )) {
 				my $now = time();
@@ -353,6 +368,9 @@ sub IRCD_daemon_mode {
 					Expires => $now + (86400 * $self->{config}->{ChannelBanDays})
 				};
 				$self->{resident}->save_channel($chan);
+				
+				# kick any users affected by new ban
+				$self->sync_all_user_modes($chan, '');
 			} # new ban
 		} # add ban
 		elsif ($mode eq '-b') {
@@ -362,6 +380,7 @@ sub IRCD_daemon_mode {
 			
 			$ban_target =~ /^(.+)\@(.+)$/;
 			my ($ban_target_user, $ban_target_ip) = ($1, $2);
+			if ($ban_target_user !~ /\!/) { $ban_target_user .= '!*'; }
 			
 			if (delete_object( $channel->{Bans}, { TargetUser => $ban_target_user, TargetIP => $ban_target_ip } )) {
 				$self->{resident}->save_channel($chan);
@@ -414,179 +433,408 @@ sub tick {
 	$self->schedule_idle();
 }
 
+sub filter_guest_cmd {
+	# apply guest restriction filters to incoming command
+	my ($self, $nick, $chan, $msg, $channel, $input) = @_;
+	my $user = $self->{resident}->get_user($nick, 1);
+	my $user_stub = $channel->{Users}->{lc($nick)} ||= {};
+	my $result = 1;
+	
+	my $strikes = $user_stub->{Strikes} || 0;
+	my $warning_append = '';
+	if ($channel->{GuestStrikes}) {
+		$warning_append = " This is strike " . int($strikes + 1) . ".";
+	}
+	
+	# prevent guests from repeating themselves
+	if ($channel->{GuestPreventRepeat} && $user->{LastCmd} && $user->{LastCmd}->{Raw}) {
+		if ($input->{raw_line} eq $user->{LastCmd}->{Raw}) {
+			$self->send_msg_to_channel_user( $nick, $chan, "NOTICE", "$nick: WARNING: Your message was not sent, because you are repeating yourself.$warning_append" );
+			$result = 0;
+			$strikes++;
+		}
+	}
+	
+	# throttle guest messages to N per sec
+	if ($result && $channel->{GuestThrottle} && $user->{LastCmd} && $user->{LastCmd}->{Raw} && ($user->{LastCmd}->{Raw} =~ /PRIVMSG/)) {
+		my $now = Time::HiRes::time();
+		if ($now - $user->{LastCmd}->{When} < 1.0 / $channel->{GuestThrottle}) {
+			$self->send_msg_to_channel_user( $nick, $chan, "NOTICE", "$nick: WARNING: Your message was not sent, because you are posting too quickly." );
+			$result = 0;
+		}
+	}
+	
+	# prevent guests screaming in all caps
+	if ($result && $channel->{GuestPreventScreaming}) {
+		my $min_length = 10;
+		my $max_pct = 90;
+		if ($channel->{GuestPreventScreaming} =~ /^(\d+)\D+(\d+)$/) {
+			$min_length = int($1);
+			$max_pct = int($2);
+		}
+		if (length($msg) >= $min_length) {
+			my $total = $msg =~ s/([A-Za-z])/$1/g;
+			my $num = $msg =~ s/([A-Z])/$1/g;
+			my $pct = ($num / $total) * 100;
+			if ($pct >= $max_pct) {
+				$self->send_msg_to_channel_user( $nick, $chan, "NOTICE", "$nick: WARNING: Your message was not sent, because you are screaming.$warning_append" );
+				$result = 0;
+				$strikes++;
+			}
+		}
+	}
+	
+	# prevent guests posting links
+	if ($result && $channel->{GuestPreventLinks}) {
+		my $num = 0;
+		$num += $msg =~ s/\b\w+\:\/\/\S+/<link removed>/g;
+		$num += $msg =~ s/\b[\w\-\.]+\.(com|net|org|biz|cat|coop|info|int|jobs|mobi|name|post|pro|tel|travel|xxx|io|au|uk|co)\b\S*/<link removed>/ig;
+		$num += $msg =~ s/\b(\d+\.\d+\.\d+\.\d+)\S*/<link removed>/ig;
+		if ($num > 0) {
+			$input->{params}->[1] = $msg; # replace with filtered text
+			$self->send_msg_to_channel_user( $nick, $chan, "NOTICE", "$nick: Please do not post links in this channel.$warning_append" );
+			$strikes++;
+		}
+	}
+	
+	# prevent guests swearing
+	if ($result && $channel->{GuestPreventSwearing} && $self->{bad_word_match}) {
+		my $bad_word_match = $self->{bad_word_match};
+		my $num = $msg =~ s/$bad_word_match/****/ig;
+		if ($num > 0) {
+			$input->{params}->[1] = $msg; # replace with filtered text
+			if ($num >= 3) {
+				# 3 or more swears per line, do not even post it.
+				$self->send_msg_to_channel_user( $nick, $chan, "NOTICE", "$nick: Your message was not posted. Please do not swear in this channel.$warning_append" );
+				$result = 0;
+				$strikes++;
+			}
+		}
+	}
+	
+	# N strikes and you're out
+	if ($channel->{GuestStrikes}) {
+		$user_stub->{Strikes} = $strikes;
+		if ($strikes >= $channel->{GuestStrikes}) {
+			# and you're out!
+			$user_stub->{TimeoutUntil} = time() + ($channel->{GuestStrikeTimeout} || 60);
+			$self->{ircd}->daemon_server_kick( nch($chan), $nick, "You're out." );
+			delete $user_stub->{Strikes};
+		}
+	}
+	
+	return $result;
+}
+
 sub cmd_from_client {
 	# called for every command entered by every user
 	my ($self, $nick, $input) = @_;
 	
 	# print "ChanServ cmd_from_client: " . Dumper($input);
 	
-	if (($input->{command} eq 'PRIVMSG') && ($input->{params}->[0] =~ /^\#\w+/) && ($input->{params}->[1] =~ /^\!(([vhas]op)|sync)/i)) {
+	if (($input->{command} eq 'PRIVMSG') && ($input->{params}->[0] =~ /^\#\w+/)) {
 		my ($chan, $msg) = @{$input->{params}};
-		
 		my $channel = $self->{resident}->get_channel($chan) || 0;
-		if (!$channel || !$channel->{Registered}) {
-			$self->send_msg_to_channel($chan, 'NOTICE', "Error: Can only use ChanServ commands in registered channels.");
-			return;
-		}
 		
-		# make sure calling user is op or higher
-		my $is_op = 0;
-		my $user_stub = $channel->{Users}->{lc($nick)} || {};
+		my $user_stub = $channel->{Users}->{lc($nick)} ||= {};
 		$user_stub->{Flags} ||= '';
-		if ($user_stub->{Flags} =~ /o/) { $is_op = 1; }
-		if (!$is_op && $self->{resident}->is_admin($nick)) { $is_op = 1; }
 		
-		# special-case: hops can manipulate the vop
-		if (($user_stub->{Flags} =~ /h/) && ($msg =~ /^\!vop\s+/i)) { $is_op = 1; }
+		if ($user_stub->{TimeoutUntil}) {
+			# user is on timeout
+			if (time() >= $user_stub->{TimeoutUntil}) {
+				# timeout is over
+				delete $user_stub->{TimeoutUntil};
+			}
+			else {
+				$self->send_msg_to_channel_user( $nick, $chan, "NOTICE", "$nick: You are on a time out.  No one can see your messages." );
+				return 0; # ABORT command, filter out, do not broadcast msg
+			}
+		} # user timeout
 		
-		if (!$is_op) {
-			$self->send_msg_to_channel($chan, 'NOTICE', "Error: You are not an op in $chan, so you cannot use ChanServ commands.");
-			return;
-		}
+		if ($channel && $channel->{Registered} && $channel->{GuestRestrictions} && !$user_stub->{Flags}) {
+			if (!$self->filter_guest_cmd($nick, $chan, $msg, $channel, $input)) {
+				return 0; # ABORT command, filter out, do not broadcast msg
+			}
+		} # guest restrictions
 		
-		if ($msg =~ /^\!([vhas])op\s+(add|remove|del)\s+(\w+)/i) {
-			my ($flag, $cmd, $target_nick) = ($1, $2, $3);
-			$flag = lc($flag);
-			$cmd = lc($cmd); $cmd =~ s/del/remove/;
-			
-			my $user = $self->{resident}->get_user($target_nick) || 0;
-			if (!$user || !$user->{Registered}) {
-				$self->send_msg_to_channel($chan, 'NOTICE', "Error: Can only use xOP commands on registered users.");
-				return;
+		if ($msg =~ /^\!(([vhas]op)|sync|timeout|kick|ban|banip|unban)/i) {
+			if (!$channel || !$channel->{Registered}) {
+				$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "Error: Can only use ChanServ commands in registered channels.");
+				return 0;
 			}
 			
-			# 'aop' just means 'op'
-			if ($flag eq 'a') { $flag = 'o'; }
+			# make sure calling user is op or higher
+			my $is_op = 0;
+			if ($user_stub->{Flags} =~ /o/) { $is_op = 1; }
+			if (!$is_op && $self->{resident}->is_admin($nick)) { $is_op = 1; }
 			
-			# special handling for 's' mode (admin)
-			if ($flag eq 's') {
-				# super-admin
-				if (!$self->{resident}->is_admin($nick)) {
-					$self->send_msg_to_channel($chan, 'NOTICE', "Error: Only administrators may use the SOP command.");
-					return;
+			# special-case: hops can manipulate the vop
+			if (($user_stub->{Flags} =~ /h/) && ($msg =~ /^\!vop\s+/i)) { $is_op = 1; }
+			
+			if (!$is_op) {
+				$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "Error: You are not an op in $chan, so you cannot use ChanServ commands.");
+				return 0;
+			}
+			
+			if ($msg =~ /^\!([vhas])op\s+(add|remove|del)\s+(\w+)/i) {
+				my ($flag, $cmd, $target_nick) = ($1, $2, $3);
+				$flag = lc($flag);
+				$cmd = lc($cmd); $cmd =~ s/del/remove/;
+				
+				my $user = $self->{resident}->get_user($target_nick) || 0;
+				if (!$user || !$user->{Registered}) {
+					$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "Error: Can only use xOP commands on registered users.");
+					return 0;
 				}
-				if ($cmd eq 'add') {
-					if (!$user->{Administrator}) {
-						$user->{Administrator} = 1;
-						$self->{resident}->save_user($target_nick);
-						$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is now a server administrator.");
-						
-						if ($user->{_identified}) {
-							$self->schedule_event( '', {
-								action => sub {
-									my $nickserv = $self->{ircd}->plugin_get( 'NickServ' );
-									$nickserv->auto_oper_check( $target_nick, 'username-unused', 'password-unused' );
-									$self->sync_all_user_modes('', $target_nick);
-								}
-							} );
-						} # identified
+				
+				# 'aop' just means 'op'
+				if ($flag eq 'a') { $flag = 'o'; }
+				
+				# special handling for 's' mode (admin)
+				if ($flag eq 's') {
+					# super-admin
+					if (!$self->{resident}->is_admin($nick)) {
+						$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "Error: Only administrators may use the SOP command.");
+						return 0;
 					}
-					else {
-						$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is already a server administrator.");
-					}
-				}
-				else {
-					if ($user->{Administrator}) {
-						delete $user->{Administrator};
-						$self->{resident}->save_user($target_nick);
-						
-						foreach my $temp_chan (@{$self->{resident}->get_all_channel_ids()}) {
-							my $temp_channel = $self->{resident}->get_channel($temp_chan);
-							if ($temp_channel && $temp_channel->{Users} && $temp_channel->{Users}->{lc($target_nick)}) {
-								delete $temp_channel->{Users}->{lc($target_nick)};
-								$self->{resident}->save_channel($temp_chan);
-							}
-						} # foreach channel
-						
-						if ($user->{_identified}) {
-							$self->schedule_event( '', {
-								action => sub {
-									my $route_id = $self->{ircd}->_state_user_route($target_nick);
-									if ($route_id) {
-										$self->{ircd}->_send_output_to_client($route_id, $_)
-											for $self->{ircd}->_daemon_cmd_umode($target_nick, '-o');
+					if ($cmd eq 'add') {
+						if (!$user->{Administrator}) {
+							$user->{Administrator} = 1;
+							$self->{resident}->save_user($target_nick);
+							$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is now a server administrator.");
+							
+							if ($user->{_identified}) {
+								$self->schedule_event( '', {
+									action => sub {
+										my $nickserv = $self->{ircd}->plugin_get( 'NickServ' );
+										$nickserv->auto_oper_check( $target_nick, 'username-unused', 'password-unused' );
+										$self->sync_all_user_modes('', $target_nick);
 									}
-									$self->sync_all_user_modes('', $target_nick);
-								}
-							} );
-						} # identified
-						
-						$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is no longer a server administrator.");
+								} );
+							} # identified
+						}
+						else {
+							$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is already a server administrator.");
+						}
 					}
 					else {
-						$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is not a server administrator.");
+						if ($user->{Administrator}) {
+							delete $user->{Administrator};
+							$self->{resident}->save_user($target_nick);
+							
+							foreach my $temp_chan (@{$self->{resident}->get_all_channel_ids()}) {
+								my $temp_channel = $self->{resident}->get_channel($temp_chan);
+								if ($temp_channel && $temp_channel->{Users} && $temp_channel->{Users}->{lc($target_nick)}) {
+									delete $temp_channel->{Users}->{lc($target_nick)};
+									$self->{resident}->save_channel($temp_chan);
+								}
+							} # foreach channel
+							
+							if ($user->{_identified}) {
+								$self->schedule_event( '', {
+									action => sub {
+										my $route_id = $self->{ircd}->_state_user_route($target_nick);
+										if ($route_id) {
+											$self->{ircd}->_send_output_to_client($route_id, $_)
+												for $self->{ircd}->_daemon_cmd_umode($target_nick, '-o');
+										}
+										$self->sync_all_user_modes('', $target_nick);
+									}
+								} );
+							} # identified
+							
+							$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is no longer a server administrator.");
+						}
+						else {
+							$self->send_msg_to_channel($chan, 'NOTICE', "User '$target_nick' is not a server administrator.");
+						}
 					}
-				}
-			} # sop
-			else {
-				# voice, half or op in this channel
-				if ($cmd eq 'add') {
-					$channel->{Users}->{lc($target_nick)} ||= { Flags => '' };
-					$channel->{Users}->{lc($target_nick)}->{Flags} = $flag;
+				} # sop
+				else {
+					# voice, half or op in this channel
+					if ($cmd eq 'add') {
+						$channel->{Users}->{lc($target_nick)} ||= { Flags => '' };
+						$channel->{Users}->{lc($target_nick)}->{Flags} = $flag;
+						
+						$self->send_msg_to_channel( $chan, 'PRIVMSG', 
+							"User '$target_nick' added to the ".nch($chan)." Auto-".ucfirst($self->{mode_map}->{$flag})." list."
+						);
+					}
+					else {
+						delete $channel->{Users}->{lc($target_nick)};
+						
+						$self->send_msg_to_channel( $chan, 'PRIVMSG', 
+							"User '$target_nick' removed from the ".nch($chan)." Auto-".ucfirst($self->{mode_map}->{$flag})." list." 
+						);
+					}
+					$self->{resident}->save_channel($chan);
 					
-					$self->send_msg_to_channel( $chan, 'PRIVMSG', 
-						"User '$target_nick' added to the ".nch($chan)." Auto-".ucfirst($self->{mode_map}->{$flag})." list."
-					);
+					$self->sync_all_user_modes($chan, $target_nick);
+				}
+			} # xOP add/remove
+			
+			elsif ($msg =~ /^\!([vhas])op\s+list$/i) {
+				my $flag = lc($1);
+				
+				# 'aop' just means 'op'
+				if ($flag eq 'a') { $flag = 'o'; }
+				
+				# special handling for 's' mode (admin)
+				if ($flag eq 's') {
+					# super-admin
+					my $ulist = [];
+					foreach my $temp_nick (@{$self->{resident}->get_all_user_ids()}) {
+						my $temp_user = $self->{resident}->get_user($temp_nick);
+						if ($temp_user->{Administrator}) { push @$ulist, $temp_nick; }
+					}
+					my $msg = '';
+					if (scalar @$ulist) {
+						$msg .= "The following users are server administrators: " . join(', ', @$ulist);
+					}
+					else {
+						$msg = "There are no server administrators listed.";
+					}
+					$self->send_msg_to_channel( $chan, 'PRIVMSG', $msg );
 				}
 				else {
-					delete $channel->{Users}->{lc($target_nick)};
-					
-					$self->send_msg_to_channel( $chan, 'PRIVMSG', 
-						"User '$target_nick' removed from the ".nch($chan)." Auto-".ucfirst($self->{mode_map}->{$flag})." list." 
-					);
+					my $ulist = [];
+					foreach my $temp_nick (sort keys %{$channel->{Users}}) {
+						my $temp_user = $channel->{Users}->{$temp_nick};
+						if ($temp_user->{Flags} && ($temp_user->{Flags} =~ /$flag/i)) { push @$ulist, $temp_nick; }
+					}
+					my $msg = '';
+					if (scalar @$ulist) {
+						$msg .= "The following users are on the ".nch($chan)." Auto-".ucfirst($self->{mode_map}->{$flag})." list: " . join(', ', @$ulist);
+					}
+					else {
+						$msg = "There are no users on the ".nch($chan)." Auto-".ucfirst($self->{mode_map}->{$flag})." list.";
+					}
+					$self->send_msg_to_channel( $chan, 'PRIVMSG', $msg );
+				} # not sop
+			} # xOP list
+			
+			elsif ($msg =~ /^\!sync$/i) {
+				# sync all users in current channel
+				$self->sync_all_user_modes($chan, '');
+			} # sync
+			
+			elsif ($msg =~ /^\!timeout\s+(\w+)(\s+\d+)?/i) {
+				# time user out (prevent speaking for N seconds)
+				my ($target_nick, $secs) = ($1, $2);
+				$secs = int( trim($secs || '') || 60 );
+				my $target_user_stub = $channel->{Users}->{lc($target_nick)} ||= {};
+				if (!$target_user_stub->{Flags} || ($target_user_stub->{Flags} !~ /o/)) {
+					$target_user_stub->{TimeoutUntil} = time() + ($secs || 60);
+					$self->send_msg_to_channel( $chan, 'PRIVMSG', "User $target_nick has been timed out for $secs seconds." );
 				}
+			} # timeout
+			
+			elsif ($msg =~ /^\!kick\s+(\w+)/i) {
+				my $target_nick = $1;
+				my $target_user_stub = $channel->{Users}->{lc($target_nick)} ||= {};
+				if (!$target_user_stub->{Flags} || ($target_user_stub->{Flags} !~ /o/)) {
+					$target_user_stub->{TimeoutUntil} = time() + 60;
+					$self->{ircd}->daemon_server_kick( nch($chan), $target_nick, $self->{resident}->{config}->{WebServer}->{KickMessage} );
+				}
+			} # kick + timeout
+			
+			elsif ($msg =~ /^\!(ban|banip)\s+(\w+)/i) {
+				my $ban_type = $1;
+				my $target_nick = $2;
+				my $now = time();
+				my $username_full = $self->{ircd}->state_user_full($nick);
+				my $expires = $now + ($self->{config}->{ChannelBanDays} * 86400);
+				
+				my $record = $self->{ircd}->{state}->{users}->{uc_irc($target_nick)} || 0;
+				
+				my $target_user = $target_nick . '!*';
+				my $target_ip = '*';
+				if ($ban_type =~ /banip/i) {
+					$target_user = '*!*';
+					if (!$record) {
+						$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "$nick: Cannot determine IP address of user '$target_nick'." );
+						return 0;
+					}
+					$target_ip = $record->{auth}->{hostname};
+				}
+				
+				# jhuckabynick!~jhuckabyuser@c9ed02581a4ce137
+				my $ban_target = $target_user . '@' . $target_ip;
+				
+				$channel->{Bans} ||= [];
+				if (find_object( $channel->{Bans}, { TargetUser => $target_user, TargetIP => $target_ip } )) {
+					$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "$nick: The ban '$ban_target' is already in effect on this channel." );
+					return 0;
+				}
+				
+				$self->log_debug(4, "Adding ban '$target_user\@$target_ip' to channel $chan");
+				
+				push @{$channel->{Bans}}, {
+					TargetUser => $target_user,
+					TargetIP => $target_ip,
+					AddedBy => $username_full,
+					Created => $now,
+					Expires => $expires
+				};
 				$self->{resident}->save_channel($chan);
 				
-				$self->sync_all_user_modes($chan, $target_nick);
-			}
-		} # xOP add/remove
-		
-		elsif ($msg =~ /^\!([vhas])op\s+list$/i) {
-			my $flag = lc($1);
+				my $crecord = $self->{ircd}->{state}{chans}{uc_irc(nch($chan))};
+				$crecord->{bans} ||= {};
+				$crecord->{bans}->{ uc($ban_target) } = [
+					$ban_target,
+					$username_full,
+					$now
+				];
+				
+				$self->send_msg_to_channel( $chan, 'PRIVMSG', 
+					($ban_type =~ /banip/i) ? "IP address for user '$target_nick' has been banned from $chan." : 
+						"User '$target_nick' has been banned from $chan." 
+				);
+				
+				# kick any users affected by ban
+				$self->sync_all_user_modes( $chan, '' );
+			} # ban nick
 			
-			# 'aop' just means 'op'
-			if ($flag eq 'a') { $flag = 'o'; }
-			
-			# special handling for 's' mode (admin)
-			if ($flag eq 's') {
-				# super-admin
-				my $ulist = [];
-				foreach my $temp_nick (@{$self->{resident}->get_all_user_ids()}) {
-					my $temp_user = $self->{resident}->get_user($temp_nick);
-					if ($temp_user->{Administrator}) { push @$ulist, $temp_nick; }
+			elsif ($msg =~ /^\!unban\s+(\w+)/i) {
+				my $target_nick = $1;
+				my $record = $self->{ircd}->{state}->{users}->{uc_irc($target_nick)} || 0;
+				my $user_ident = $record ? $record->{auth}->{ident} : '_UNDEF_';
+				my $user_host = $record ? $record->{auth}->{hostname} : '_UNDEF_';
+				my $user_ip = $record ? $record->{socket}->[0] : '_UNDEF_';
+				my $ban_match = "($target_nick|$user_ident|$user_host|$user_ip)";
+				
+				$channel->{Bans} ||= [];
+				my $new_bans = [];
+				my $num_found = 0;
+				
+				my $crecord = $self->{ircd}->{state}{chans}{uc_irc(nch($chan))};
+				$crecord->{bans} ||= {};
+				
+				foreach my $ban (@{$channel->{Bans}}) {
+					if (($ban->{TargetUser} =~ /$ban_match/i) || ($ban->{TargetIP} =~ /$ban_match/i)) {
+						$num_found++;
+						my $ban_target = $ban->{TargetUser} . '@' . $ban->{TargetIP};
+						delete $crecord->{bans}->{ uc($ban_target) };
+					}
+					else {
+						push @$new_bans, $ban;
+					}
 				}
-				my $msg = '';
-				if (scalar @$ulist) {
-					$msg .= "The following users are server administrators: " . join(', ', @$ulist);
+				if ($num_found) {
+					$channel->{Bans} = $new_bans;
+					$self->{resident}->save_channel($chan);
+					$self->send_msg_to_channel( $chan, 'PRIVMSG', "All channel bans for '$target_nick' have been removed ($num_found found)." );
 				}
 				else {
-					$msg = "There are no server administrators listed.";
+					$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "$nick: No channel bans found matching '$target_nick'." );
+					return 0;
 				}
-				$self->send_msg_to_channel( $chan, 'PRIVMSG', $msg );
-			}
-			else {
-				my $ulist = [];
-				foreach my $temp_nick (sort keys %{$channel->{Users}}) {
-					my $temp_user = $channel->{Users}->{$temp_nick};
-					if ($temp_user->{Flags} && ($temp_user->{Flags} =~ /$flag/i)) { push @$ulist, $temp_nick; }
-				}
-				my $msg = '';
-				if (scalar @$ulist) {
-					$msg .= "The following users are on the ".nch($chan)." Auto-".ucfirst($self->{mode_map}->{$flag})." list: " . join(', ', @$ulist);
-				}
-				else {
-					$msg = "There are no users on the ".nch($chan)." Auto-".ucfirst($self->{mode_map}->{$flag})." list.";
-				}
-				$self->send_msg_to_channel( $chan, 'PRIVMSG', $msg );
-			} # not sop
-		} # xOP list
-		
-		elsif ($msg =~ /^\!sync$/i) {
-			# sync all users in current channel
-			$self->sync_all_user_modes($chan, '');
-		} # sync
-		
+			} # unban user
+			
+		} # xOp cmd
 	} # privmsg
+	
+	return 1;
 }
 
 sub sync_all_user_modes {

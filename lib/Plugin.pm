@@ -58,6 +58,36 @@ sub send_msg_to_user {
 	);
 }
 
+sub send_msg_to_channel_user {
+	# send message or notice to user inside channel
+	# but don't broadcast to any other users in the channel (NEAT TRICK!)
+	my ($self, $nick, $chan, $type, $msg) = @_;
+	
+	my ($package, undef, undef) = caller();
+	$package =~ s/^(.+)::(\w+)$/$2/;
+	
+	my $route_id = $self->{ircd}->_state_user_route($nick);
+	if (!$route_id) { return; }
+	
+	$self->log_debug(9, "Sending $type to $nick in $chan: $msg");
+	
+	foreach my $line (split(/\n/, $msg)) {
+		next unless $line =~ /\S/;
+		$self->{ircd}->_send_output_to_client( $route_id, {
+			prefix  => $self->{ircd}->state_user_full($package),
+			command => $type,
+			params  => [ nch($chan), $line ]
+		});
+	}
+	
+	$self->{resident}->log_event(
+		log => 'transcript',
+		package => '0.0.0.0',
+		level => $package,
+		msg => "$type $nick $chan $msg"
+	);
+}
+
 sub send_msg_to_channel {
 	# send message to everyone in channel
 	my ($self, $chan, $type, $msg) = @_;

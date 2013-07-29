@@ -223,11 +223,72 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 		html += get_form_table_spacer();
 		
 		// join notice
-		html += get_form_table_row( 'Join Notice', '<textarea id="fe_ec_joinnotice" style="width:600px;" rows="3">'+escape_textarea_field_value(channel.JoinNotice)+'</textarea>' );
-		html += get_form_table_caption( "Optionally enter a join notice for the channel.  The ChanServ bot will send this to all users who join the channel.");
+		html += get_form_table_row( 'Join Message', '<textarea id="fe_ec_joinnotice" style="width:600px;" rows="3">'+escape_textarea_field_value(channel.JoinNotice)+'</textarea>' );
+		html += get_form_table_caption( "Optionally enter a join message for the channel.  The ChanServ bot will send this to all users who join the channel.");
 		html += get_form_table_spacer();
 		
+		// GuestRestrictions
+		html += get_form_table_row( 'Guest Options', '<input type="checkbox" id="fe_ecg_restrict" value="1" '+(channel.GuestRestrictions ? 'checked="checked"' : '')+' onChange="$P().setGroupVisible(\'guest\',this.checked)"/><label for="fe_ecg_restrict">Enable guest restrictions</label>' );
+		html += get_form_table_caption( "This enables various guest restrictions on the channel.<br/>A 'guest' is a user who has no privileges / modes (i.e. non-op, non-voice).");
+		html += get_form_table_spacer('guestgroup', 'short transparent');
+		
+		// GuestPreventRepeat
+		html += get_form_table_row( 'guestgroup', 'Repeats', '<input type="checkbox" id="fe_ecg_repeat" value="1" '+(channel.GuestPreventRepeat ? 'checked="checked"' : '')+'/><label for="fe_ecg_repeat">Prevent guests from repeating themselves</label>' );
+		html += get_form_table_caption( 'guestgroup', "This prevents guest users from posting the same message multiple times.");
+		html += get_form_table_spacer('guestgroup', 'short transparent');
+		
+		// GuestThrottle
+		html += get_form_table_row( 'guestgroup', 'Throttle', '<table cellspacing="0" cellpadding="0"><tr><td><input type="checkbox" id="fe_ecg_throttle_checked" value="1" '+(channel.GuestThrottle ? 'checked="checked"' : '')+' onChange="$P().setPlaceholderTextFieldValue(this.checked,\'fe_ecg_throttle\')"/></td><td><label for="fe_ecg_throttle_checked" style="font-size:13px;">Prevent guests from posting more than</label>&nbsp;</td><td><input type="text" id="fe_ecg_throttle" size="2" placeholder="1" value="'+escape_text_field_value(channel.GuestThrottle || '')+'"/></td><td>&nbsp;messages per second</td></tr></table>' );
+		html += get_form_table_caption( 'guestgroup', "This prevents guest users from flooding the channel.");
+		html += get_form_table_spacer('guestgroup', 'short transparent');
+		
+		// GuestPreventScreaming
+		html += get_form_table_row( 'guestgroup', 'Screaming', '<input type="checkbox" id="fe_ecg_scream" value="1" '+(channel.GuestPreventScreaming ? 'checked="checked"' : '')+'/><label for="fe_ecg_scream">Prevent guests from screaming</label>' );
+		html += get_form_table_caption( 'guestgroup', "This prevents guest users from 'screaming', i.e. TYPING IN ALL CAPS.");
+		html += get_form_table_spacer('guestgroup', 'short transparent');
+		
+		// GuestPreventSwearing
+		html += get_form_table_row( 'guestgroup', 'Swearing', '<input type="checkbox" id="fe_ecg_swear" value="1" '+(channel.GuestPreventSwearing ? 'checked="checked"' : '')+'/><label for="fe_ecg_swear">Prevent guests from swearing</label>' );
+		html += get_form_table_caption( 'guestgroup', "This prevents guest users from posting profanity in the channel.<br/>Bad words are replaced with asterisks (****), and severe offenses are blocked entirely.");
+		html += get_form_table_spacer('guestgroup', 'short transparent');
+		
+		// GuestPreventLinks
+		html += get_form_table_row( 'guestgroup', 'Links', '<input type="checkbox" id="fe_ecg_links" value="1" '+(channel.GuestPreventLinks ? 'checked="checked"' : '')+'/><label for="fe_ecg_links">Prevent guests from posting links</label>' );
+		html += get_form_table_caption( 'guestgroup', "This prevents guest users from posting links URLs and IPs in the channel.");
+		html += get_form_table_spacer('guestgroup', 'short transparent');
+		
+		// GuestStrikes
+		html += get_form_table_row( 'guestgroup', 'Strikes', '<table cellspacing="0" cellpadding="0"><tr><td><input type="checkbox" id="fe_ecg_strikes_checked" value="1" '+(channel.GuestStrikes ? 'checked="checked"' : '')+' onChange="$P().setPlaceholderTextFieldValue(this.checked,\'fe_ecg_strikes\')"/></td><td><label for="fe_ecg_strikes_checked" style="font-size:13px;">Kick and time out guests after</label>&nbsp;</td><td><input type="text" id="fe_ecg_strikes" size="2" placeholder="3" value="'+escape_text_field_value(channel.GuestStrikes || '')+'"/></td><td>&nbsp;strikes</td></tr></table>' );
+		html += get_form_table_caption( 'guestgroup', "This will kick and time out guest users after violating a certain number of rules.");
+		// html += get_form_table_spacer('guestgroup', 'short transparent');
+		
+		html += get_form_table_spacer();
+		
+		if (!channel.GuestRestrictions) $('tr.guestgroup').hide();
+		setTimeout( function() {
+			if (!channel.GuestRestrictions) $('tr.guestgroup').hide();
+		}, 1 );
+		
 		return html;
+	},
+	
+	setPlaceholderTextFieldValue: function(checked, id) {
+		// if checkbox is checked and associated text field is blank or 0, set to 'placeholder' attrib value
+		if (checked) {
+			var field = $('#' + id);
+			if (!field.val() || (field.val() == "0")) {
+				field.val( field.attr('placeholder') );
+				field.focus();
+			}
+		}
+	},
+	
+	setGroupVisible: function(group, visible) {
+		// set the nick, chan, log or web groups of form fields visible or invisible, 
+		// according to master checkbox for each section
+		var selector = 'tr.' + group + 'group';
+		if (visible) $(selector).show(250);
+		else $(selector).hide(250);
 	},
 	
 	get_channel_form_xml: function() {
@@ -238,11 +299,23 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 			URL: trim($('#fe_ec_url').val()),
 			JoinNotice: trim($('#fe_ec_joinnotice').val()),
 			Private: parseInt( $('#fe_ec_access').val(), 10 ),
-			Founder: $('#fe_ec_founder').val()
+			Founder: $('#fe_ec_founder').val(),
+			GuestRestrictions: $('#fe_ecg_restrict').is(':checked') ? 1 : 0,
+			GuestPreventRepeat: $('#fe_ecg_repeat').is(':checked') ? 1 : 0,
+			GuestThrottle: $('#fe_ecg_throttle_checked').is(':checked') ? $('#fe_ecg_throttle').val() : 0,
+			GuestPreventScreaming: $('#fe_ecg_scream').is(':checked') ? 1 : 0,
+			GuestPreventLinks: $('#fe_ecg_links').is(':checked') ? 1 : 0,
+			GuestPreventSwearing: $('#fe_ecg_swear').is(':checked') ? 1 : 0,
+			GuestStrikes: $('#fe_ecg_strikes_checked').is(':checked') ? $('#fe_ecg_strikes').val() : 0
 		};
 		
 		if (!channel.Name) return app.badField('fe_ec_name', "Please enter an ID for the channel.");
 		if (!channel.Founder) return app.badField('fe_ec_founder', "Please enter a founder (owner) for the channel.");
+		
+		if (channel.GuestRestrictions) {
+			if (!channel.GuestThrottle.match(/^\d+(\.\d+)?$/)) return app.badField('fe_ecg_throttle', "Please enter a number of messages per second.");
+			if (!channel.GuestStrikes.match(/^\d+$/)) return app.badField('fe_ecg_strikes', "Please enter a number of guest strikes.");	
+		}
 		
 		return channel;
 	},
@@ -563,7 +636,13 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 		
 		// html += '<div style="padding:10px 20px 20px 20px;">';
 		html += '<div style="padding:20px 20px 30px 20px">';
-		html += '<div class="subtitle">Bans for Channel ' + nch(this.channel.Name) + '</div>';
+		// html += '<div class="subtitle">Bans for Channel ' + nch(this.channel.Name) + '</div>';
+		
+		html += '<div class="subtitle">';
+			html += 'Bans for Channel ' + nch(this.channel.Name);
+			html += '<div class="subtitle_widget"><span class="link" onMouseUp="$P().refresh_channel_bans()"><b>Refresh List</b></span></div>';
+			html += '<div class="clear"></div>';
+		html += '</div>';
 		
 		html += this.getPaginatedTable( resp, cols, 'ban', function(ban, idx) {
 			var actions = [];
@@ -587,6 +666,12 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 		html += '</div>'; // sidebar tabs
 		
 		this.div.html( html );
+	},
+	
+	refresh_channel_bans: function() {
+		// refresh user list
+		app.api.mod_touch( 'channel_get_bans' );
+		this.gosub_bans(this.args);
 	},
 	
 	edit_channel_ban: function(idx, default_nick, default_ip) {

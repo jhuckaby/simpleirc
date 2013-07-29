@@ -694,7 +694,13 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 		
 		// html += '<div style="padding:10px 20px 20px 20px;">';
 		html += '<div style="padding:20px 20px 30px 20px">';
-		html += '<div class="subtitle">Server IP Bans</div>';
+		// html += '<div class="subtitle">Server IP Bans</div>';
+		
+		html += '<div class="subtitle">';
+			html += 'Server IP Bans';
+			html += '<div class="subtitle_widget"><span class="link" onMouseUp="$P().refresh_server_bans()"><b>Refresh List</b></span></div>';
+			html += '<div class="clear"></div>';
+		html += '</div>';
 		
 		html += this.getPaginatedTable( resp, cols, 'ban', function(ban, idx) {
 			var actions = [];
@@ -717,6 +723,12 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 		html += '</div>'; // sidebar tabs
 		
 		this.div.html( html );
+	},
+	
+	refresh_server_bans: function() {
+		// refresh user list
+		app.api.mod_touch( 'server_get_bans' );
+		this.gosub_bans(this.args);
 	},
 	
 	edit_server_ban: function(idx, default_ip, callback) {

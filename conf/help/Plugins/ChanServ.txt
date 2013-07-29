@@ -16,6 +16,11 @@ SHORTCUTS:
 !HOP (add|remove|list) <nickname> - Add or remove user from auto-half-op list for current channel.
 !AOP (add|remove|list) <nickname> - Add or remove user from auto-op list for current channel.
 !SOP (add|remove|list) <nickname> - Add or remove user from server administrator list (server-wide, all channels).
-!SYNC - Synchronize user privileges (user modes) for channel.
+!SYNC - Synchronize all user privileges (user modes) for channel.
+!TIMEOUT <nickname> (seconds) - Prevent a user from speaking in a channel for N seconds, defaults to 60.
+!KICK <nickname> - Alternate kick command, which also times the user out for 60 seconds.
+!BAN <nickname> - Quick kick + ban shortcut, which bans the user's nickname from the channel.
+!BANIP <nickname> - Quick kick + ban shortcut, which bans the user's IP address from the channel.
+!UNBAN <nickname> - Quick unban, removes ALL bans associated with user's nick, host and/or IP address.
 -
 End of Help
