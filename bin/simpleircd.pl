@@ -512,6 +512,7 @@ use POE::Component::Server::IRC::Common qw(chkpasswd);
 use POE::Component::Server::IRC::Plugin qw(:ALL);
 use base qw( POE::Component::Server::IRC );
 use Time::HiRes; # not importing time() to be safe, calling explicitly when i need it
+use IRC::Utils ':ALL';
 
 use Tools;
 use VersionInfo;
