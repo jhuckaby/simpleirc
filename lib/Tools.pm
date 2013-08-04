@@ -673,7 +673,7 @@ sub xml_post {
 	}
 
 	##
-	# Check for a successful response from Rimfire
+	# Check for a successful response
 	##
 	if ($response->is_success()) {
 		my $content = $response->content();
