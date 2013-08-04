@@ -81,28 +81,28 @@ sub IRCD_daemon_privmsg {
 		}
 		else {
 			# bad format
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Error: Bad syntax for 'register' command. Please use: /msg nickserv register PASSWORD EMAIL");
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: Bad syntax for 'register' command. Please use: /msg nickserv register PASSWORD EMAIL");
 			return PCSI_EAT_NONE;
 		}
 		if ($email !~ /^.+\@.+$/) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Error: Incorrectly formatted email address: $email");
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: Incorrectly formatted email address: $email");
 			return PCSI_EAT_NONE;
 		}
 		
 		my $nick_exclude_re = $ns_config->{RegExclude} || '';
 		if ($nick_exclude_re && ($nick =~ m@$nick_exclude_re@i)) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Please change your nickname before registering. Type: /nick NEWNICK");
+			$self->send_msg_to_user($nick, 'NOTICE', "Please change your nickname before registering. Type: /nick NEWNICK");
 			return PCSI_EAT_NONE;
 		}
 		
 		my $user = $self->{resident}->get_user($nick, 1);
 		
 		if ($user->{Registered}) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Nick '$nick' is already registered.  If you have forgotten your password, please type: /msg nickserv recover EMAIL");
+			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' is already registered.  If you have forgotten your password, please type: /msg nickserv recover EMAIL");
 			return PCSI_EAT_NONE;
 		}
 		if ($user->{_identified}) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Nick '$nick' is already registered and you have identified.");
+			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' is already registered and you have identified.");
 			return PCSI_EAT_NONE;
 		}
 		
@@ -126,7 +126,7 @@ sub IRCD_daemon_privmsg {
 		
 		$self->{resident}->save_user($nick);
 		
-		$self->send_msg_to_user($nick, 'PRIVMSG', "Nick '$nick' has been successfully registered and identified.");
+		$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' has been successfully registered and identified.");
 		
 		# auto-oper check
 		$self->auto_oper_check($nick, 1, 1);
@@ -144,27 +144,27 @@ sub IRCD_daemon_privmsg {
 		my $email = $1;
 		
 		if ($email !~ /^.+\@.+$/) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Error: Incorrectly formatted email address: $email");
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: Incorrectly formatted email address: $email");
 			return PCSI_EAT_NONE;
 		}
 		
 		my $user = $self->{resident}->get_user($nick, 1);
 		
 		if (!$user->{Registered}) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Nick '$nick' has not yet been registered. Please type: /msg nickserv register PASSWORD EMAIL");
+			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' has not yet been registered. Please type: /msg nickserv register PASSWORD EMAIL");
 			return PCSI_EAT_NONE;
 		}
 		if (lc($email) ne lc($user->{Email})) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Error: The email address you provided does not match our records: $email");
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: The email address you provided does not match our records: $email");
 			return PCSI_EAT_NONE;
 		}
 		
 		if (!$self->{resident}->send_user_password_reset_email($nick)) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Error: Could not send e-mail. Please try again later.");
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: Could not send e-mail. Please try again later.");
 			return PCSI_EAT_NONE;
 		}
 		
-		$self->send_msg_to_user($nick, 'PRIVMSG', "Instructions for resetting your password have been sent to you via e-mail.");
+		$self->send_msg_to_user($nick, 'NOTICE', "Instructions for resetting your password have been sent to you via e-mail.");
 	} # recover
 	
 	elsif ($msg =~ /^confirm/i) {
@@ -180,7 +180,7 @@ sub IRCD_daemon_privmsg {
 		}
 		else {
 			# bad format
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Error: Bad syntax for 'confirm' command. Please use: /msg nickserv confirm SECRETKEY PASSWORD");
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: Bad syntax for 'confirm' command. Please use: /msg nickserv confirm SECRETKEY PASSWORD");
 			return PCSI_EAT_NONE;
 		}
 		
@@ -188,11 +188,11 @@ sub IRCD_daemon_privmsg {
 		
 		if (!$user->{TempPasswordResetHash} && $user->{_old_nick}) {
 			my $old_nick = $user->{_old_nick};
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Error: Your nick was changed to '$nick'. Please type: /nick $old_nick, then enter the confirm command again.");
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: Your nick was changed to '$nick'. Please type: /nick $old_nick, then enter the confirm command again.");
 			return PCSI_EAT_NONE;
 		}
 		if ($secret ne $user->{TempPasswordResetHash}) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Error: Secret key does not match. Please copy the command from your confirmation e-mail.");
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: Secret key does not match. Please copy the command from your confirmation e-mail.");
 			return PCSI_EAT_NONE;
 		}
 		
@@ -214,7 +214,7 @@ sub IRCD_daemon_privmsg {
 		
 		$self->{resident}->save_user($nick);
 		
-		$self->send_msg_to_user($nick, 'PRIVMSG', "Your password for nickname '$nick' has been reset successfully.");
+		$self->send_msg_to_user($nick, 'NOTICE', "Your password for nickname '$nick' has been reset successfully.");
 		
 		# auto-oper check
 		$self->auto_oper_check($nick, 1, 1);
@@ -233,20 +233,20 @@ sub IRCD_daemon_privmsg {
 		my $user = $self->{resident}->get_user($nick, 1);
 		
 		if (!$user->{Registered}) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Nick '$nick' has not yet been registered. Please type: /msg nickserv register PASSWORD EMAIL");
+			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' has not yet been registered. Please type: /msg nickserv register PASSWORD EMAIL");
 			return PCSI_EAT_NONE;
 		}
 		if ($user->{_identified}) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Nick '$nick' is already identified.");
+			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' is already identified.");
 			return PCSI_EAT_NONE;
 		}
 		if ($user->{Status} =~ /suspended/i) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "The '$nick' user account is suspended, and cannot be accessed at this time.");
+			$self->send_msg_to_user($nick, 'NOTICE', "The '$nick' user account is suspended, and cannot be accessed at this time.");
 			return PCSI_EAT_NONE;
 		}
 		
 		if (md5_hex($password . $user->{ID}) ne $user->{Password}) {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "Error: Incorrect password for '$nick'. If you have forgotten your password, please type: /msg nickserv recover EMAIL");
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: Incorrect password for '$nick'. If you have forgotten your password, please type: /msg nickserv recover EMAIL");
 			return PCSI_EAT_NONE;
 		}
 		
@@ -295,7 +295,7 @@ sub IRCD_daemon_privmsg {
 				$self->log_debug(3, "User $target_nick is deleting their own account.");
 			} # password matches
 			else {
-				$self->send_msg_to_user($nick, 'PRIVMSG', "Error: Your password is incorrect.");
+				$self->send_msg_to_user($nick, 'NOTICE', "Error: Your password is incorrect.");
 				return PCSI_EAT_NONE;
 			}
 		} # delete self
@@ -367,11 +367,11 @@ sub IRCD_daemon_privmsg {
 			
 			if ($nick eq $target_nick) {
 				# deleted our own account
-				$self->send_msg_to_user($nick, 'PRIVMSG', "Your user account was successfully deleted.");
+				$self->send_msg_to_user($nick, 'NOTICE', "Your user account was successfully deleted.");
 			}
 			else {
 				# deleted a nick other than ourselves, inform admin
-				$self->send_msg_to_user($nick, 'PRIVMSG', "The user account '$target_nick' was successfully deleted.");
+				$self->send_msg_to_user($nick, 'NOTICE', "The user account '$target_nick' was successfully deleted.");
 			}
 		} # proceed with drop
 	} # drop
@@ -419,7 +419,7 @@ sub IRCD_daemon_privmsg {
 			} );
 		}
 		else {
-			$self->send_msg_to_user($nick, 'PRIVMSG', "You are not logged in.");
+			$self->send_msg_to_user($nick, 'NOTICE', "You are not logged in.");
 		}
 	} # logout
 	
