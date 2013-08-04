@@ -74,6 +74,7 @@ sub death {
 	my $msg = shift;
 	log_msg( "Fatal Error: $msg" );
 	log_msg( "Exiting" );
+	unlink "$base_dir/logs/upgrade.lock";
 	die $msg;
 }
 
