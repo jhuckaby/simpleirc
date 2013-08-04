@@ -140,13 +140,15 @@ sub is_tcp_port_used {
 	my $port = shift;
 	my $socket = undef;
 	
+	local $SIG{ALRM} = sub { die "ALRM\n" };
 	alarm 5;
 	eval {
 		$socket = new IO::Socket::INET(
 			PeerAddr => '127.0.0.1',
 			PeerPort => $port,
 			Proto => "tcp",
-			Type => SOCK_STREAM
+			Type => SOCK_STREAM,
+			Timeout => 5
 		);
 	};
 	alarm 0;
