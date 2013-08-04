@@ -38,14 +38,6 @@ chdir( $base_dir );
 
 print "\n";
 
-my $pid_file = 'logs/pid.txt';
-if (-e $pid_file) {
-	my $pid = trim( load_file($pid_file) );
-	if ($pid && kill(0, $pid)) {
-		die "Please stop the SimpleIRC service before adding users, e.g. /etc/init.d/simpleircd stop\n\n";
-	}
-}
-
 my $config = eval { json_parse(load_file('conf/config-defaults.json')); };
 if (!$config) { die "Failed to parse config-defaults.json: $@\n\n"; }
 
@@ -79,6 +71,15 @@ $user->{Modified} = $now;
 my $user_file = "data/users/$username.json";
 if (-e $user_file) {
 	# user exists, merge in keys
+	
+	my $pid_file = 'logs/pid.txt';
+	if (-e $pid_file) {
+		my $pid = trim( load_file($pid_file) );
+		if ($pid && kill(0, $pid)) {
+			die "ERROR: User '$suername' already exists.  Please stop the SimpleIRC service before modifying existing users, e.g. /etc/init.d/simpleircd stop\n\n";
+		}
+	}
+	
 	print "User $username already exists, merging in your parameters...\n";
 	my $user_raw = load_file($user_file);
 	my $old_user = undef;
