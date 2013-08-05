@@ -76,7 +76,7 @@ if (-e $user_file) {
 	if (-e $pid_file) {
 		my $pid = trim( load_file($pid_file) );
 		if ($pid && kill(0, $pid)) {
-			die "ERROR: User '$suername' already exists.  Please stop the SimpleIRC service before modifying existing users, e.g. /etc/init.d/simpleircd stop\n\n";
+			die "ERROR: User '$username' already exists.  Please stop the SimpleIRC service before modifying existing users, e.g. /etc/init.d/simpleircd stop\n\n";
 		}
 	}
 	
