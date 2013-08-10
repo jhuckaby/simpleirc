@@ -25,7 +25,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 	gosub_config: function(args) {
 		// edit config subpage
 		// this.div.addClass('loading');
-		app.api.post( 'config', {}, [this, 'receive_config'] );
+		app.api.post( 'config_for_edit', {}, [this, 'receive_config'] );
 	},
 	
 	receive_config: function(resp, tx) {
@@ -100,6 +100,14 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 		html += get_form_table_row( 'Standard IRC', '<table cellspacing="0" cellpadding="0"><tr><td><input type="checkbox" id="fe_es_portchecked" value="1" '+(config.Port ? 'checked="checked"' : '')+'/></td><td><label for="fe_es_portchecked" style="font-size:13px;">Enable standard IRC on port:</label>&nbsp;</td><td><input type="text" id="fe_es_port" size="6" placeholder="6667" value="'+escape_text_field_value(config.Port)+'"/></td></tr></table>' );
 		html += get_form_table_row( 'Secure IRC', '<table cellspacing="0" cellpadding="0"><tr><td><input type="checkbox" id="fe_es_sslchecked" value="1" '+(config.SSL.Enabled ? 'checked="checked"' : '')+'/></td><td><label for="fe_es_sslchecked" style="font-size:13px;">Enable secure SSL IRC on port:</label>&nbsp;</td><td><input type="text" id="fe_es_sslport" size="6" placeholder="6697" value="'+escape_text_field_value(config.SSL.Port)+'"/></td></tr></table>' );
 		html += get_form_table_caption( "Choose how you want your IRC service implemented, using standard (insecure) and/or SSL encrypted modes.  Note that SSL requires a certificate (an example one is provided for testing, but shouldn't be used for production)." );
+		html += get_form_table_spacer();
+		
+		// Password and Antiflood
+		html += get_form_table_row( 'Server Password', '<input type="password" id="fe_es_serverpassword" size="20" value="'+escape_text_field_value(config.ServerPassword)+'"/>' );
+		html += get_form_table_caption( "Optionally enter a global password to lock down the server.  This will be required by all users to connect, and is different from the username and password they use for identifying themselves.");
+		html += get_form_table_spacer('short transparent');
+		html += get_form_table_row( 'Antiflood', '<input type="checkbox" id="fe_es_antiflood" value="1" '+(config.Antiflood ? 'checked="checked"' : '')+'/><label for="fe_es_antiflood">Enable Flood Protection</label>' );
+		html += get_form_table_caption( "This option enables 'Antiflood' mode on the server, so that users cannot flood connections with too much traffic.  Those that do so are throttled down.  It is highly recommended that you leave this enabled.");
 		html += get_form_table_spacer();
 		
 		// NickServ Enabled
@@ -443,6 +451,8 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 			ServerName: $('#fe_es_servername').val(),
 			ServerDesc: $('#fe_es_serverdesc').val(),
 			Port: trim($('#fe_es_portchecked').is(':checked') ? $('#fe_es_port').val() : ''),
+			ServerPassword: $('#fe_es_serverpassword').val(),
+			Antiflood: $('#fe_es_antiflood').is(':checked') ? 1 : 0,
 			SSL: {
 				Enabled: $('#fe_es_sslchecked').is(':checked') ? 1 : 0,
 				Port: trim($('#fe_es_sslport').val())
@@ -572,6 +582,8 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 		
 		if (nc.ServerName != oc.ServerName) return true;
 		if (nc.Port != oc.Port) return true;
+		if (nc.ServerPassword != oc.ServerPassword) return true;
+		if (nc.Antiflood != oc.Antiflood) return true;
 		if (nc.SSL.Enabled != oc.SSL.Enabled) return true;
 		if (nc.SSL.Port != oc.SSL.Port) return true;
 		if (nc.Plugins.NickServ.Enabled != oc.Plugins.NickServ.Enabled) return true;

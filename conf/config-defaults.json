@@ -6,6 +6,9 @@
 	"ServerName" : "sample.irc.local",
 	"ServerDesc" : "My Cool IRC Server",
 	"Port" : 6667,
+	"ServerPassword": "",
+	"Antiflood": 1,
+	
 	"ServerBanDays" : 90,
 	"SecretKey" : "jf7sJFG4500000_",
 	"MaxNickLength" : 32,

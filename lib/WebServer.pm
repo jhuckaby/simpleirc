@@ -207,6 +207,27 @@ sub api_config {
 	};
 }
 
+sub api_config_for_edit {
+	# send config object tree to client
+	my $self = shift;
+	my $args = {@_};
+	my $query = $args->{query};
+	
+	# must be admin and logged in for this
+	my $session = $self->require_session($args) or return { Code => 'session' };
+	my $username = $session->{Username};
+	
+	if (!$self->is_admin($username)) {
+		return { Code => 1, Description => "You must be a server administrator to edit the configuration." };
+	}
+	
+	return {
+		Code => 0,
+		Config => $self->{config},
+		Version => get_version()
+	};
+}
+
 sub api_check_version {
 	# call home to get latest version for our branch
 	my $self = shift;

@@ -123,7 +123,7 @@ my $pocosi = POE::Component::Server::IRC::Simple->spawn(
 	},
 	sslify_options => $config->{SSL}->{Enabled} ? [$config->{SSL}->{KeyFile}, $config->{SSL}->{CertFile}] : 0,
 	auth		  => 0,
-	# antiflood	 => 0,
+	antiflood	 => $config->{Antiflood} ? 1 : 0,
 	# plugin_debug   => 1
 	debug => 1 # REQUIRED for capturing raw IRC input/output (for calculating bandwidth)
 );
@@ -284,8 +284,10 @@ sub _start {
 	#);
 
 	# We have to add an auth as we have specified one above.
-	# $heap->{ircd}->add_auth(mask => '*@*');
-
+	if ($config->{ServerPassword}) {
+		$heap->{ircd}->add_auth( mask => '*@*', password => $config->{ServerPassword} );
+	}
+	
 	# Start a listener on the 'standard' IRC port.
 	if ($config->{Port}) {
 		$resident->log_debug(3, "Opening IRC socket listener on port " . $config->{Port});
