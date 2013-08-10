@@ -953,7 +953,7 @@ sub api_channel_update {
 		$channel->{Private} = $json->{Private};
 		
 		# reset channel invite flag accordingly
-		$self->{ircd}->daemon_server_mode($chan, ($channel->{Private} ? '+' : '-') . 'i');
+		$self->{ircd}->daemon_server_mode($chan, ($channel->{Private} ? '+' : '-') . 'ip');
 	}
 	
 	# other channel params

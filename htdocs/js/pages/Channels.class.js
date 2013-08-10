@@ -257,6 +257,11 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 		html += get_form_table_caption( 'guestgroup', "This prevents guest users from posting links URLs and IPs in the channel.");
 		html += get_form_table_spacer('guestgroup', 'short transparent');
 		
+		// GuestPreventColors
+		html += get_form_table_row( 'guestgroup', 'Colors', '<input type="checkbox" id="fe_ecg_colors" value="1" '+(channel.GuestPreventColors ? 'checked="checked"' : '')+'/><label for="fe_ecg_colors">Prevent guests from using IRC colors and formatting</label>' );
+		html += get_form_table_caption( 'guestgroup', "This prevents guest users from posting messages that contain colored or formatted text.");
+		html += get_form_table_spacer('guestgroup', 'short transparent');
+		
 		// GuestStrikes
 		html += get_form_table_row( 'guestgroup', 'Strikes', '<table cellspacing="0" cellpadding="0"><tr><td><input type="checkbox" id="fe_ecg_strikes_checked" value="1" '+(channel.GuestStrikes ? 'checked="checked"' : '')+' onChange="$P().setPlaceholderTextFieldValue(this.checked,\'fe_ecg_strikes\')"/></td><td><label for="fe_ecg_strikes_checked" style="font-size:13px;">Kick and time out guests after</label>&nbsp;</td><td><input type="text" id="fe_ecg_strikes" size="2" placeholder="3" value="'+escape_text_field_value(channel.GuestStrikes || '')+'"/></td><td>&nbsp;strikes</td></tr></table>' );
 		html += get_form_table_caption( 'guestgroup', "This will kick and time out guest users after violating a certain number of rules.");
@@ -306,6 +311,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 			GuestPreventScreaming: $('#fe_ecg_scream').is(':checked') ? 1 : 0,
 			GuestPreventLinks: $('#fe_ecg_links').is(':checked') ? 1 : 0,
 			GuestPreventSwearing: $('#fe_ecg_swear').is(':checked') ? 1 : 0,
+			GuestPreventColors: $('#fe_ecg_colors').is(':checked') ? 1 : 0,
 			GuestStrikes: $('#fe_ecg_strikes_checked').is(':checked') ? $('#fe_ecg_strikes').val() : 0
 		};
 		

@@ -191,7 +191,7 @@ sub IRCD_daemon_privmsg {
 			$self->{resident}->save_channel($chan);
 			
 			# set channel invite flag accordingly
-			$ircd->daemon_server_mode($chan, ($channel->{Private} ? '+' : '-') . 'i');
+			$ircd->daemon_server_mode($chan, ($channel->{Private} ? '+' : '-') . 'ip');
 			
 			# sync user modes (kick the uninvited)
 			$self->sync_all_user_modes($chan, '');
@@ -296,7 +296,7 @@ sub IRCD_daemon_join {
 			
 			# special channel modes (private, user limit)
 			if ($channel->{Private}) {
-				$ircd->daemon_server_mode($chan, '+i');
+				$ircd->daemon_server_mode($chan, '+ip');
 			}
 			if ($channel->{UserLimit}) {
 				$ircd->daemon_server_mode($chan, '+l', $channel->{UserLimit});
@@ -464,7 +464,7 @@ sub filter_guest_cmd {
 		}
 	}
 	
-	# prevent guests screaming in all caps
+	# prevent guests from screaming in all caps
 	if ($result && $channel->{GuestPreventScreaming}) {
 		my $min_length = 10;
 		my $max_pct = 90;
@@ -484,7 +484,7 @@ sub filter_guest_cmd {
 		}
 	}
 	
-	# prevent guests posting links
+	# prevent guests from posting links
 	if ($result && $channel->{GuestPreventLinks}) {
 		my $num = 0;
 		$num += $msg =~ s/\b\w+\:\/\/\S+/<link removed>/g;
@@ -497,7 +497,7 @@ sub filter_guest_cmd {
 		}
 	}
 	
-	# prevent guests swearing
+	# prevent guests from swearing
 	if ($result && $channel->{GuestPreventSwearing} && $self->{bad_word_match}) {
 		my $bad_word_match = $self->{bad_word_match};
 		my $num = $msg =~ s/$bad_word_match/****/ig;
@@ -510,6 +510,12 @@ sub filter_guest_cmd {
 				$strikes++;
 			}
 		}
+	}
+	
+	# prevent guests from using IRC colors / styles
+	if ($result && $channel->{GuestPreventColors}) {
+		$msg = strip_color( strip_formatting( $msg ) );
+		$input->{params}->[1] = $msg; # replace with filtered text
 	}
 	
 	# N strikes and you're out
