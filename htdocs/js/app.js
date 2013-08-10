@@ -499,6 +499,14 @@ function get_form_table_spacer() {
 	return html;
 };
 
+function show_hide_password(id) {
+	// simple show/hide toggle for password fields using jQuery
+	var html = '';
+	html += '<span class="link" style="text-decoration:none;" onMouseUp="$(\'#'+id+'\')[0].type=\'text\';$(this).hide().next().show();">&laquo; Show</span>';
+	html += '<span class="link" style="text-decoration:none; display:none" onMouseUp="$(\'#'+id+'\')[0].type=\'password\';$(this).hide().prev().show();">&laquo; Hide</span>';
+	return html;
+};
+
 if (!window.Debug) window.Debug = {
 	trace: function(cat, msg) {
 		if (cat && !msg) { msg = cat; cat = 'Debug'; }

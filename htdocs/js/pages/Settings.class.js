@@ -103,7 +103,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 		html += get_form_table_spacer();
 		
 		// Password and Antiflood
-		html += get_form_table_row( 'Server Password', '<input type="password" id="fe_es_serverpassword" size="20" value="'+escape_text_field_value(config.ServerPassword)+'"/>' );
+		html += get_form_table_row( 'Server Password', '<input type="password" id="fe_es_serverpassword" size="20" value="'+escape_text_field_value(config.ServerPassword)+'"/>&nbsp;' + (config.ServerPassword ? show_hide_password('fe_es_serverpassword') : '') );
 		html += get_form_table_caption( "Optionally enter a global password to lock down the server.  This will be required by all users to connect, and is different from the username and password they use for identifying themselves.");
 		html += get_form_table_spacer('short transparent');
 		html += get_form_table_row( 'Antiflood', '<input type="checkbox" id="fe_es_antiflood" value="1" '+(config.Antiflood ? 'checked="checked"' : '')+'/><label for="fe_es_antiflood">Enable Flood Protection</label>' );
