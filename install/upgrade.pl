@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 
-# SimpleIRC Background Updater
-# Automatically invoked by web service
+# SimpleIRC Foreground Updater
 # by Joseph Huckaby
 # Copyright (c) 2013 EffectSoftware.com
 
@@ -25,22 +24,14 @@ my $log_file = "$base_dir/logs/upgrade.log";
 
 if ($EUID != 0) { die( "Error: Must be root to upgrade SimpleIRC (you are user $EUID).  Exiting.\n" ); }
 
+my $lock_file = "$base_dir/logs/upgrade.lock";
+if (-e $lock_file) { death( "Error: There is an upgrade operation already in progress (lock file exists: $lock_file).\n" ); }
+touch( $lock_file );
+
 my $current_version = get_version();
 my $branch = (shift @ARGV) || $current_version->{Branch};
 
-# fork to immediately return control to calling terminal
-# and detach child from terminal
-my $pid = fork();
-if (!defined($pid)) { death( "Error: Cannot fork daemon process: $!\n" ); }
-if ($pid) { exit(0); }
-
-setsid();
-open( STDIN, "</dev/null" );
-open( STDOUT, ">/dev/null" );
-# chdir( '/' );
-# umask( 0 );
-
-log_msg("Initiating upgrade for $branch");
+log_msg("Initiating upgrade for $branch...");
 
 my $script_url = "http://effectsoftware.com/software/simpleirc/install-latest-$branch.txt";
 log_msg("Fetching URL: $script_url");
@@ -54,7 +45,7 @@ if (!save_file($temp_file, $script_raw)) { death("Failed to save temp file: $tem
 if (!chmod( 0775, $temp_file )) { death("Failed to chmod file: $temp_file: $!\n"); }
 
 # exec script as a pipe, so we can capture output as it happens
-log_msg("Executing installer script");
+log_msg("Executing installer script...");
 my $fh = FileHandle->new( "$temp_file 2>&1 |" );
 if (!$fh) { death("Failed to open pipe to: $temp_file: $!\n"); }
 my $line = undef;
@@ -65,7 +56,7 @@ while (defined($line = <$fh>)) {
 $fh->close();
 
 unlink $temp_file;
-unlink "$base_dir/logs/upgrade.lock";
+unlink $lock_file;
 log_msg( "Upgrade complete, exiting." );
 
 exit(0);
@@ -75,7 +66,7 @@ sub death {
 	my $msg = shift;
 	log_msg( "Fatal Error: $msg" );
 	log_msg( "Exiting" );
-	unlink "$base_dir/logs/upgrade.lock";
+	unlink $lock_file;
 	die $msg;
 }
 
@@ -90,6 +81,8 @@ sub log_msg {
 	$nice_msg =~ s/\s+$//; # trim trailing whitespace
 	
 	if (length($nice_msg)) {
+		print "$nice_msg\n";
+		
 		my $nice_time = scalar localtime;
 		my $line = "[" . join('][', 
 			time(),
