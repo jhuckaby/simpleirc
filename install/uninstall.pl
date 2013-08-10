@@ -11,7 +11,7 @@ use English qw( -no_match_vars ) ;
 
 if ($UID != 0) { die "Error: Must be root to uninstall SimpleIRC.  Exiting.\n"; }
 
-if (yesno("\nAre you sure you want to COMPLETELY DELETE SimpleIRC, including all users, channels, configuration, data and logs?", "n")) {
+if (yesno("\nAre you sure you want to COMPLETELY DELETE SimpleIRC, including all users,\nchannels, configuration, data and logs?", "n")) {
 	print "Uninstalling SimpleIRC...\n";
 	
 	exec_shell("/etc/init.d/simpleircd stop");
