@@ -46,7 +46,7 @@
 	
 	"Logging" : {
 		"Enabled" : 1,
-		"EchoToConsole" : 1,
+		"EchoToConsole" : 0,
 		"LogPrivateMessages": 0,
 		"ActiveLogs" : {
 			"error" : 1,
