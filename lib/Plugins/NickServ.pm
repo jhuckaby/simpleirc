@@ -44,6 +44,10 @@ sub PCSI_register {
 		my ($this, $nick, $cmd) = @_;
 		$self->IRCD_daemon_privmsg( $ircd, \$nick, \"NickServ", \$cmd, [] );
 	} );
+	$self->add_custom_command( 'nickserv', sub {
+		my ($this, $nick, $cmd) = @_;
+		$self->IRCD_daemon_privmsg( $ircd, \$nick, \"NickServ", \$cmd, [] );
+	} );
 	
 	$self->add_custom_command( 'identify', sub {
 		my ($this, $nick, $cmd) = @_;

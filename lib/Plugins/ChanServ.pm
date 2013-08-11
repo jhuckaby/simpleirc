@@ -50,6 +50,10 @@ sub PCSI_register {
 		my ($this, $nick, $cmd) = @_;
 		$self->IRCD_daemon_privmsg( $ircd, \$nick, \"ChanServ", \$cmd, [] );
 	} );
+	$self->add_custom_command( 'chanserv', sub {
+		my ($this, $nick, $cmd) = @_;
+		$self->IRCD_daemon_privmsg( $ircd, \$nick, \"ChanServ", \$cmd, [] );
+	} );
 	
 	# load bad word list and compile into regexp
 	my $words = [];
