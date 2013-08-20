@@ -77,7 +77,9 @@ if ($poe_tcp_version eq '1.354') {
 	
 	if ($poe_tcp_dest_size != $poe_tcp_patch_size) {
 		print "Patching POE::Component::Server::TCP v1.354...\n";
+		chmod 0644, $poe_tcp_dest_file;
 		exec_shell( "cp -v $poe_tcp_patch_file $poe_tcp_dest_file");
+		chmod 0444, $poe_tcp_dest_file;
 	}
 }
 
