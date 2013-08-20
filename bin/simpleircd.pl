@@ -233,6 +233,7 @@ POE::Session->create(
 	inline_states => {
 		got_sig_int => \&listener_got_sig_int,
 		got_sig_term => \&listener_got_sig_term
+		# got_sig_die => \&listener_got_sig_die
 	}
 );
 
@@ -270,6 +271,7 @@ sub _start {
 	
 	$kernel->sig(INT => "got_sig_int");
 	$kernel->sig(TERM => "got_sig_term");
+	# $kernel->sig(DIE => 'got_sig_die');
 	
 	$heap->{ircd}->yield('register', 'all');
 	
@@ -495,6 +497,18 @@ sub listener_got_sig_term {
 	$resident->log_debug(2, "Received SIGTERM");
 	# delete $_[HEAP]->{ircd};
 	# $_[KERNEL]->sig_handled();
+}
+
+sub listener_got_sig_die {
+	my ($kernel, $heap) = @_[KERNEL, HEAP];
+	my( $sig, $ex ) = @_[ ARG0, ARG1 ];
+	$resident->log_debug(2, "Received SIGDIE: " . $ex->{event} . ": " . $ex->{error_str});
+	$kernel->sig_handled();
+	
+	# Send the signal to session that sent the original event.
+	if( $ex->{source_session} ne $_[SESSION] ) {
+		$kernel->signal( $ex->{source_session}, 'DIE', $sig, $ex );
+	}
 }
 
 1;
