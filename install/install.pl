@@ -67,7 +67,7 @@ foreach my $module (split(/\n/, load_file("$base_dir/install/perl-modules.txt"))
 
 # JH 2013-08-19 Special patch for POE::Component::Server::TCP 1.354
 # https://rt.cpan.org/Public/Bug/Display.html?id=87922
-my $poe_tcp_version = trim(`/usr/bin/perl -MPOE::Component::Server::TCP -e 'print \$POE::Component::Server::TCP::VERSION;`);
+my $poe_tcp_version = trim(`/usr/bin/perl -MPOE::Component::Server::TCP -e 'print \$POE::Component::Server::TCP::VERSION;'`);
 if ($poe_tcp_version eq '1.354') {
 	my $poe_tcp_patch_file = "$base_dir/install/patches/TCP.pm";
 	my $poe_tcp_patch_size = (stat($poe_tcp_patch_file))[7];
