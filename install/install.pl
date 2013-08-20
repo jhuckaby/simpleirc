@@ -65,6 +65,22 @@ foreach my $module (split(/\n/, load_file("$base_dir/install/perl-modules.txt"))
 	}
 }
 
+# JH 2013-08-19 Special patch for POE::Component::Server::TCP 1.354
+# https://rt.cpan.org/Public/Bug/Display.html?id=87922
+my $poe_tcp_version = trim(`/usr/bin/perl -MPOE::Component::Server::TCP -e 'print \$POE::Component::Server::TCP::VERSION;`);
+if ($poe_tcp_version eq '1.354') {
+	my $poe_tcp_patch_file = "$base_dir/install/patches/TCP.pm";
+	my $poe_tcp_patch_size = (stat($poe_tcp_patch_file))[7];
+	
+	my $poe_tcp_dest_file = trim(`/usr/bin/perl -MPOE::Component::Server::TCP -e 'print \$INC{"POE/Component/Server/TCP.pm"};'`);
+	my $poe_tcp_dest_size = (stat($poe_tcp_dest_file))[7];
+	
+	if ($poe_tcp_dest_size != $poe_tcp_patch_size) {
+		print "Patching POE::Component::Server::TCP v1.354...\n";
+		exec_shell( "cp -v $poe_tcp_patch_file $poe_tcp_dest_file");
+	}
+}
+
 exec_shell( "chmod 775 $base_dir/bin/*" );
 
 # detect first install
