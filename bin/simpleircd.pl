@@ -743,6 +743,37 @@ sub _daemon_cmd_who {
 	return $ref;
 }
 
+sub _daemon_cmd_away {
+	# overriding POE::Component::Server::IRC::_daemon_cmd_away
+	# so we can add our own Nick[Away] functionality on top of the default
+	my $self = shift;
+	my $nick   = shift || return;
+	my $msg    = shift;
+	my $record = $self->{state}{users}{uc_irc($nick)};
+	
+	if (!$msg && !$record->{away}) { $msg = "Away"; }
+	
+	my $ref = POE::Component::Server::IRC::_daemon_cmd_away($self, $nick, $msg);
+	
+	if ($record->{away}) {
+		$self->{resident}->log_debug(5, "User $nick going into away state: $msg");
+		if ($nick !~ /\[Away]$/i) {
+			my $orig_nick = $nick; $orig_nick =~ s/\[\w+\]$//;
+			$self->_daemon_cmd_nick( $nick, $orig_nick . '[Away]' );
+		}
+	}
+	else {
+		$self->{resident}->log_debug(5, "User $nick is back, removing away state");
+		if ($nick =~ /\[\w+\]$/) {
+			my $orig_nick = $nick; $orig_nick =~ s/\[\w+\]$//;
+			$self->_daemon_cmd_nick( $nick, $orig_nick );
+		}
+	}
+	
+	return @$ref if wantarray;
+	return $ref;
+}
+
 sub _daemon_cmd_topic {
 	# overriding POE::Component::Server::IRC::_daemon_cmd_topic
 	# ugly hack to fix format of '333' command for apps like KiwiIRC
@@ -1171,7 +1202,7 @@ sub _cmd_from_client {
 		} # foreach plugin
 		
 		if ($input->{command} ne 'PING') {
-			if ($self->{resident}->{config}->{Logging}->{LogPrivateMessages} || ($input->{raw_line} !~ /^(PRIVMSG|NS|CS|IDENTIFY|REGISTER)\s+\w+/)) {
+			if ($self->{resident}->{config}->{Logging}->{LogPrivateMessages} || ($input->{raw_line} !~ /^(PRIVMSG|NS|CS|NICKSERV|CHANSERV|IDENTIFY|REGISTER)\s+\w+/)) {
 				my $record = $self->{state}{conns}{$wheel_id};
 				$self->{resident}->log_event(
 					log => 'transcript',
@@ -1192,6 +1223,12 @@ sub _cmd_from_client {
 				$self->{total_messages_sent}++;
 			} # okay to log
 		} # not a ping
+		
+		if ($input->{command} eq 'PRIVMSG') {
+			# if user is away but is now talking, remove away status
+			my $record = $self->{state}{users}{uc_irc($nick)};
+			if ($record->{away}) { $self->_daemon_cmd_away($nick); }
+		}
 		
 	} # raw_line
 	
