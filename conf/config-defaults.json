@@ -37,7 +37,7 @@
 		"NickServ" : {
 			"Enabled" : 1,
 			"RegForce" : 0,
-			"RegExclude" : "^(Web|Unidentified)\\d+$",
+			"RegExclude" : "^(Web|Unidentified)\\d+(\\[\\w+\\])?$",
 			"UnregPrefix" : "Unidentified",
 			"RegTimeout" : 60,
 			"NickExpireDays" : 360
