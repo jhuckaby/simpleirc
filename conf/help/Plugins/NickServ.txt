@@ -11,11 +11,13 @@ RECOVER <email> - Sends password recovery information via e-mail.
 CONFIRM <code> <new_password> - Confirms password reset code and sets new password.
 DROP <password> - Deletes your user account associated with your nickname.
 DROP <nickname> - Deletes any user account (server administrators only).
+OVERRIDE <password> - User identity override, kicks out other user, nicks you back.
 -
 SHORTCUTS:
 -
 /NS - Shortcut for /msg NickServ
 /IDENTIFY - Shortcut for /msg NickServ IDENTIFY
 /REGISTER - Shortcut for /msg NickServ REGISTER
+/OVERRIDE - Shortcut for /msg NickServ OVERRIDE
 -
 End of Help
