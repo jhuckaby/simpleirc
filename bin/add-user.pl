@@ -17,6 +17,7 @@ use Cwd qw/abs_path/;
 use URI::Escape;
 use Digest::MD5 qw(md5_hex);
 use English qw( -no_match_vars ) ;
+use IRC::Utils ':ALL';
 
 BEGIN {
 	push @INC, dirname(dirname(abs_path($0))) . "/lib";
@@ -32,6 +33,10 @@ my $usage = "Usage: ./add-user.pl --Username USERNAME --Password PASSWORD --Full
 my $cmdline_args = new Args( @ARGV );
 my $args = { %$cmdline_args }; # unbless
 if (!$args->{Username} || !$args->{Password} || !$args->{FullName} || !$args->{Email}) { die $usage; }
+
+if (!is_valid_nick_name($args->{Username})) { die "ERROR: Username '".$args->{Username}."' is not a valid IRC nickname.\n"; }
+$args->{Username} = nnick( $args->{Username} );
+if (!length($args->{Username})) { die "ERROR: That nickname cannot be registered, as it is invalid (must contain alphanumerics, not in brackets)\n"; }
 
 my $base_dir = dirname(dirname(abs_path($0)));
 chdir( $base_dir );
