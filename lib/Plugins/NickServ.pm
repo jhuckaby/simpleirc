@@ -8,7 +8,7 @@ package POE::Component::Server::IRC::Plugin::NickServ;
 use strict;
 use warnings;
 use POE::Component::Server::IRC::Plugin qw(:ALL);
-use IRC::Utils qw/uc_irc/;
+use IRC::Utils ':ALL';
 use Data::Dumper;
 use Digest::MD5 qw/md5_hex/;
 use Tools;
@@ -52,6 +52,11 @@ sub PCSI_register {
 	$self->add_custom_command( 'identify', sub {
 		my ($this, $nick, $cmd) = @_;
 		$cmd = "IDENTIFY " . $cmd;
+		$self->IRCD_daemon_privmsg( $ircd, \$nick, \"NickServ", \$cmd, [] );
+	} );
+	$self->add_custom_command( 'override', sub {
+		my ($this, $nick, $cmd) = @_;
+		$cmd = "OVERRIDE " . $cmd;
 		$self->IRCD_daemon_privmsg( $ircd, \$nick, \"NickServ", \$cmd, [] );
 	} );
 	
@@ -99,6 +104,11 @@ sub IRCD_daemon_privmsg {
 			return PCSI_EAT_NONE;
 		}
 		
+		if (!length(nnick($nick))) {
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: Your nickname cannot be registered, as it is invalid (must contain alphanumerics, not in brackets)");
+			return PCSI_EAT_NONE;
+		}
+		
 		my $user = $self->{resident}->get_user($nick, 1);
 		
 		if ($user->{Registered}) {
@@ -110,7 +120,7 @@ sub IRCD_daemon_privmsg {
 			return PCSI_EAT_NONE;
 		}
 		
-		$user->{Username} = lc($nick);
+		$user->{Username} = nnick($nick);
 		$user->{DisplayUsername} = $nick;
 		$user->{Email} = $email;
 		$user->{ID} = generate_unique_id();
@@ -140,7 +150,7 @@ sub IRCD_daemon_privmsg {
 		$chanserv->sync_all_user_modes( '', $nick );
 		
 		# cleanup old schedule entries for nick reg
-		delete $self->{schedule}->{lc($nick)};
+		delete $self->{schedule}->{nnick($nick)};
 	} # register
 	
 	elsif ($msg =~ /^recover\s+(\S+)$/i) {
@@ -228,7 +238,7 @@ sub IRCD_daemon_privmsg {
 		$chanserv->sync_all_user_modes( '', $nick );
 		
 		# cleanup old schedule entries for nick reg
-		delete $self->{schedule}->{lc($nick)};
+		delete $self->{schedule}->{nnick($nick)};
 	} # confirm password reset
 	
 	elsif ($msg =~ /^(identify|login)\s+(.+)$/i) {
@@ -236,19 +246,19 @@ sub IRCD_daemon_privmsg {
 		my $password = $2;
 		my $user = $self->{resident}->get_user($nick, 1);
 		
-		if (!$user->{Registered}) {
-			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' has not yet been registered. Please type: /msg nickserv register PASSWORD EMAIL");
-			return PCSI_EAT_NONE;
-		}
 		if ($user->{_identified}) {
 			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' is already identified.");
 			return PCSI_EAT_NONE;
 		}
-		if ($user->{Status} =~ /suspended/i) {
+		if ($user->{Status} && ($user->{Status} =~ /suspended/i)) {
 			$self->send_msg_to_user($nick, 'NOTICE', "The '$nick' user account is suspended, and cannot be accessed at this time.");
 			return PCSI_EAT_NONE;
 		}
-		
+		if (!$user->{Registered}) {
+			# user is not registered
+			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' has not yet been registered. Please type: /msg nickserv register PASSWORD EMAIL");
+			return PCSI_EAT_NONE;
+		}
 		if (md5_hex($password . $user->{ID}) ne $user->{Password}) {
 			$self->send_msg_to_user($nick, 'NOTICE', "Error: Incorrect password for '$nick'. If you have forgotten your password, please type: /msg nickserv recover EMAIL");
 			return PCSI_EAT_NONE;
@@ -279,8 +289,61 @@ sub IRCD_daemon_privmsg {
 		$chanserv->sync_all_user_modes( '', $nick );
 		
 		# cleanup old schedule entries for nick reg
-		delete $self->{schedule}->{lc($nick)};
+		delete $self->{schedule}->{nnick($nick)};
 	} # identify
+	
+	elsif ($msg =~ /^(override)\s+(.+)$/i) {
+		# override nick identity, kick out the other guy
+		my $password = $2;
+		my $user = $self->{resident}->get_user($nick, 1);
+		
+		if ($user->{_identified}) {
+			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' is already identified.");
+			return PCSI_EAT_NONE;
+		}
+		if ($user->{Status} && ($user->{Status} =~ /suspended/i)) {
+			$self->send_msg_to_user($nick, 'NOTICE', "The '$nick' user account is suspended, and cannot be accessed at this time.");
+			return PCSI_EAT_NONE;
+		}
+		
+		if (!$user->{Registered} && ($nick =~ /_$/)) {
+			# user is not registered
+			my $std_nick = $nick; $std_nick =~ s/_$//;
+			my $std_user = $self->{resident}->get_user($std_nick, 0);
+			if ($std_user && $std_user->{Registered} && (md5_hex($password . $std_user->{ID}) eq $std_user->{Password})) {
+				# very special case: user trying to identify as 'nick_', and is not registered,
+				# BUT 'nick' also exists, is registered, and password matches, so boot other user and nick to him
+				$self->log_debug(5, "User '$nick' has identified as '$std_nick', transferring identify now");
+				
+				$self->log_debug(9, "Phase 1: Killing '$std_nick'");
+				$ircd->daemon_server_kill( $std_nick, "Identity Override" );
+				
+				delete $self->{schedule}->{nnick($nick)};
+				delete $self->{schedule}->{nnick($std_nick)};
+				
+				$self->schedule_event( '', {
+					action => sub {
+						$self->log_debug(9, "Phase 2: Changing nick '$nick' to '$std_nick'");
+						$ircd->_daemon_cmd_nick( $nick, $std_nick );
+						
+						$self->schedule_event( '', {
+							action => sub {
+								$std_user = $self->{resident}->get_user($std_nick, 0);
+								if ($std_user && !$std_user->{_identified}) {
+									$self->log_debug(9, "Phase 3: Re-identifying as '$std_nick'");
+									my $cmd = "IDENTIFY " . $password;
+									$self->IRCD_daemon_privmsg( $ircd, \$std_nick, \"NickServ", \$cmd, [] );
+								}
+							}
+						} );
+					} # sub
+				} ); # schedule event
+				
+			} # std user
+		} # not registered, and nick_
+		
+		return PCSI_EAT_NONE;
+	} # override
 	
 	elsif ($msg =~ /^(drop|delete)\s+(\S+)$/i) {
 		# drop nick (delete account)
@@ -314,19 +377,20 @@ sub IRCD_daemon_privmsg {
 		if ($target_nick) {
 			# okay, we have a target nick, proceed with drop operation
 			# cleanup old schedule entries for old nick reg
-			delete $self->{schedule}->{lc($target_nick)};
+			delete $self->{schedule}->{nnick($target_nick)};
 			
 			# if user is a server administrator, remove that too
 			if ($target_user->{Administrator}) {
 				delete $target_user->{Administrator};
+				my $unick = $self->{resident}->get_irc_username($target_nick);
 				
-				if ($target_user->{_identified}) {
+				if ($unick && $target_user->{_identified}) {
 					$self->schedule_event( '', {
 						action => sub {
-							my $route_id = $self->{ircd}->_state_user_route($target_nick);
+							my $route_id = $self->{ircd}->_state_user_route($unick);
 							if ($route_id) {
 								$self->{ircd}->_send_output_to_client($route_id, $_)
-									for $self->{ircd}->_daemon_cmd_umode($target_nick, '-o');
+									for $self->{ircd}->_daemon_cmd_umode($unick, '-o');
 							}
 						}
 					} );
@@ -336,8 +400,8 @@ sub IRCD_daemon_privmsg {
 			# delete all privs in all channels
 			foreach my $temp_chan (@{$self->{resident}->get_all_channel_ids()}) {
 				my $temp_channel = $self->{resident}->get_channel($temp_chan);
-				if ($temp_channel && $temp_channel->{Users} && $temp_channel->{Users}->{lc($target_nick)}) {
-					delete $temp_channel->{Users}->{lc($target_nick)};
+				if ($temp_channel && $temp_channel->{Users} && $temp_channel->{Users}->{nnick($target_nick)}) {
+					delete $temp_channel->{Users}->{nnick($target_nick)};
 					$self->{resident}->save_channel($temp_chan);
 				}
 			} # foreach channel
@@ -350,11 +414,11 @@ sub IRCD_daemon_privmsg {
 			$self->{resident}->unload_user($target_nick);
 			
 			# delete user record from disk
-			unlink( $self->{resident}->{user_dir} . '/' . lc($target_nick) . '.json' );
+			unlink( $self->{resident}->{user_dir} . '/' . nnick($target_nick) . '.json' );
 			
 			# change user nick if required
-			my $unick = uc_irc($target_nick);
-			my $record = $ircd->{state}{users}{$unick} || 0;
+			my $unick = $self->{resident}->get_irc_username($target_nick);
+			my $record = $unick ? ($ircd->{state}{users}{$unick} || 0) : 0;
 			
 			if ($ns_config->{RegForce} && $record) {
 				my $nick_exclude_re = $ns_config->{RegExclude} || '';
@@ -388,16 +452,17 @@ sub IRCD_daemon_privmsg {
 			delete $user->{_identified};
 			
 			# cleanup old schedule entries for old nick reg
-			delete $self->{schedule}->{lc($nick)};
+			delete $self->{schedule}->{nnick($nick)};
 			
 			# if user is admin, remove the global 'o' priv
 			if ($user->{Administrator}) {
 				$self->schedule_event( '', {
 					action => sub {
-						my $route_id = $self->{ircd}->_state_user_route($nick);
+						my $unick = $self->{resident}->get_irc_username($nick);
+						my $route_id = $unick ? $self->{ircd}->_state_user_route($unick) : 0;
 						if ($route_id) {
 							$self->{ircd}->_send_output_to_client($route_id, $_)
-								for $self->{ircd}->_daemon_cmd_umode($nick, '-o');
+								for $self->{ircd}->_daemon_cmd_umode($unick, '-o');
 						}
 					}
 				} );
@@ -454,14 +519,14 @@ sub IRCD_daemon_nick {
 	my $route_id = $ircd->_state_user_route($new_nick);
 	if ($route_id ne 'spoofed') {
 		my $old_user = undef;
-		if (lc($new_nick) ne lc($nick)) {
+		if (nnick($new_nick) ne nnick($nick)) {
 			# load old user and UNidentify him
 			$old_user = $self->{resident}->get_user($nick);
 			delete $old_user->{_identified};
 			
 			# cleanup old schedule entries for both nicks
-			delete $self->{schedule}->{lc($nick)};
-			delete $self->{schedule}->{lc($new_nick)};
+			delete $self->{schedule}->{nnick($nick)};
+			delete $self->{schedule}->{nnick($new_nick)};
 			
 			# free up memory from old nick
 			$self->{resident}->unload_user($nick);
@@ -476,11 +541,14 @@ sub IRCD_daemon_nick {
 				# nick requires reg
 				$self->send_msg_to_user($new_nick, 'NOTICE', "Please register your nickname by typing: /msg nickserv register PASSWORD EMAIL");
 				
+				my $timeout_nick = $self->get_rand_nick();
+				if (($new_nick ne $nick) && $nick_exclude_re && ($nick =~ m@$nick_exclude_re@i)) { $timeout_nick = $nick; }
+				
 				$self->schedule_event( $new_nick, {
 					when => $now + $ns_config->{RegTimeout},
 					action => 'evt_change_nick',
 					old_nick => $new_nick,
-					new_nick => ($new_nick eq $nick) ? $self->get_rand_nick() : $nick,
+					new_nick => $timeout_nick,
 					msg => "Your nick was changed because you did not register '$new_nick'."
 				} );
 			}
@@ -488,11 +556,15 @@ sub IRCD_daemon_nick {
 		elsif ($user->{Registered} && !$user->{_identified}) {
 			$self->send_msg_to_user($new_nick, 'NOTICE', "This nickname is registered. Please identify by typing: /msg nickserv identify PASSWORD");
 			
+			my $nick_exclude_re = $ns_config->{RegExclude} || '';
+			my $timeout_nick = $self->get_rand_nick();
+			if (($new_nick ne $nick) && $nick_exclude_re && ($nick =~ m@$nick_exclude_re@i)) { $timeout_nick = $nick; }
+			
 			$self->schedule_event( $new_nick, {
 				when => $now + $ns_config->{RegTimeout},
 				action => 'evt_change_nick',
 				old_nick => $new_nick,
-				new_nick => ($new_nick eq $nick) ? $self->get_rand_nick() : $nick,
+				new_nick => $timeout_nick,
 				msg => "Your nick was changed because '$new_nick' is registered, and you did not identify."
 			} );
 		}
@@ -525,7 +597,7 @@ sub IRCD_daemon_quit {
 	# $self->log_debug(9, "IRCD_daemon_quit: " . Dumper(\@_) );
 	
 	# cleanup old schedule entries for nick reg
-	delete $self->{schedule}->{lc($nick)};
+	delete $self->{schedule}->{nnick($nick)};
 	
 	# free up memory from old nick
 	$self->{resident}->unload_user($nick);
@@ -549,6 +621,26 @@ sub tick {
 	# called every second
 	my $self = shift;
 	$self->schedule_idle();
+}
+
+sub cmd_from_client {
+	# called for every command entered by every user
+	my ($self, $nick, $input) = @_;
+	
+	# print "NickServ cmd_from_client: " . Dumper($input);
+	
+	if ($input->{command} eq 'NICK') {
+		my $new_nick = trim( $input->{params}->[0] );
+		if (nnick($nick) ne nnick($new_nick)) {
+			# nick has really changed, validate it
+			if ($self->{resident}->get_irc_username($new_nick)) {
+				$self->log_debug(6, "Cannot change nick from '$nick' to '$new_nick', as it is already taken.");
+				return 0; # ABORT command, filter out, do not process further
+			}
+		} # nick has really changed
+	} # NICK
+	
+	return 1; # allow command to be processed
 }
 
 sub evt_change_nick {
@@ -597,14 +689,16 @@ sub get_rand_nick {
 sub auto_oper_check {
 	# check if user is supposed to be an oper, and if so, oper right away
 	my ($self, $nick, $username, $password) = @_;
+	my $unick = $self->{resident}->get_irc_username($nick);
 	
-	if ($self->{ircd}->_state_o_line($nick, $username, $password)) {
-		my $route_id = $self->{ircd}->_state_user_route($nick);
+	if ($unick && $self->{ircd}->_state_o_line($unick, $username, $password)) {
+		my $route_id = $self->{ircd}->_state_user_route($unick);
 		return 0 unless $route_id;
+		
 		$self->{ircd}->_send_output_to_client(
 			$route_id,
 			(ref $_ eq 'ARRAY' ? @{ $_ } : $_),
-		) for $self->{ircd}->_daemon_cmd_oper( $nick, $username, $password );
+		) for $self->{ircd}->_daemon_cmd_oper( $unick, $username, $password );
 		
 		return 1;
 	}

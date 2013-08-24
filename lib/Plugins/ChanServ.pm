@@ -124,8 +124,8 @@ sub IRCD_daemon_privmsg {
 		# register it!
 		$channel->{ID} = generate_unique_id();
 		$channel->{Registered} = 1;
-		$channel->{Founder} = lc($nick);
-		$channel->{Users} = { lc($nick) => { Flags => 'o' } };
+		$channel->{Founder} = nnick($nick);
+		$channel->{Users} = { nnick($nick) => { Flags => 'o' } };
 		
 		$self->{resident}->save_channel($chan);
 		
@@ -154,7 +154,7 @@ sub IRCD_daemon_privmsg {
 			return PCSI_EAT_NONE;
 		}
 		
-		if ($user->{Administrator} || ($channel->{Founder} eq lc($nick))) {
+		if ($user->{Administrator} || ($channel->{Founder} eq nnick($nick))) {
 			# okay to delete
 			$self->delete_channel($chan);
 			
@@ -189,7 +189,7 @@ sub IRCD_daemon_privmsg {
 			return PCSI_EAT_NONE;
 		}
 		
-		if ($user->{Administrator} || ($channel->{Founder} eq lc($nick))) {
+		if ($user->{Administrator} || ($channel->{Founder} eq nnick($nick))) {
 			# set access level
 			$channel->{Private} = ($access eq 'private') ? 1 : 0;
 			$self->{resident}->save_channel($chan);
@@ -227,7 +227,7 @@ sub IRCD_daemon_join {
 	
 	my $channel = $self->{resident}->get_channel($chan);
 	if ($channel) {
-		my $user_stub = $channel->{Users}->{ lc($nick) } || 0;
+		my $user_stub = $channel->{Users}->{ nnick($nick) } || 0;
 		my $user = $self->{resident}->get_user($nick) || 0;
 		
 		# private channel and user not on list?  kick!
@@ -239,7 +239,7 @@ sub IRCD_daemon_join {
 		if ($user_stub && $user_stub->{Flags} && $user && $user->{_identified} && !$user->{Administrator}) { # operserv handles admins
 			$ircd->daemon_server_mode($chan, '+'.$user_stub->{Flags}, $nick);
 		}
-		elsif (($channel->{Founder} eq lc($nick)) && $user && $user->{_identified} && !$user->{Administrator}) {
+		elsif (($channel->{Founder} eq nnick($nick)) && $user && $user->{_identified} && !$user->{Administrator}) {
 			# channel founder
 			$ircd->daemon_server_mode($chan, '+o', $nick);
 		}
@@ -258,7 +258,7 @@ sub IRCD_daemon_join {
 				next unless $line =~ /\S/;
 				$self->{ircd}->_send_output_to_client( $route_id, { 
 					prefix => $self->{ircd}->state_user_full('ChanServ'), 
-					command => 'PRIVMSG',
+					command => 'NOTICE',
 					params => [nch($chan), $line] 
 				} );
 			}
@@ -393,7 +393,7 @@ sub IRCD_daemon_mode {
 		elsif ($self->{resident}->get_user($target_nick, 0)) {
 			# set user mode and remember it, but ONLY if nick is registered and identified
 			my $user = $self->{resident}->get_user( $target_nick );
-			my $cuser = $channel->{Users}->{ lc($target_nick) } ||= { Flags => '' };
+			my $cuser = $channel->{Users}->{ nnick($target_nick) } ||= { Flags => '' };
 			
 			my $unick = uc_irc($target_nick);
 			my $record = $ircd->{state}{users}{$unick};
@@ -402,7 +402,7 @@ sub IRCD_daemon_mode {
 			if ($record && $record->{chans} && $user && $user->{Registered} && $user->{_identified}) {
 				$cuser->{Flags} = $record->{chans}->{$uchan} || '';
 				$self->{resident}->log_debug(4, "Permanently setting user $target_nick flags in channel $chan: " . ($cuser->{Flags} || 'n/a'));
-				if (!$cuser->{Flags}) { delete $channel->{Users}->{ lc($target_nick) }; }
+				if (!$cuser->{Flags}) { delete $channel->{Users}->{ nnick($target_nick) }; }
 				$self->{resident}->save_channel($chan);
 			}
 		} # user mode
@@ -441,7 +441,7 @@ sub filter_guest_cmd {
 	# apply guest restriction filters to incoming command
 	my ($self, $nick, $chan, $msg, $channel, $input) = @_;
 	my $user = $self->{resident}->get_user($nick, 1);
-	my $user_stub = $channel->{Users}->{lc($nick)} ||= {};
+	my $user_stub = $channel->{Users}->{nnick($nick)} ||= {};
 	my $result = 1;
 	
 	my $strikes = $user_stub->{Strikes} || 0;
@@ -546,7 +546,7 @@ sub cmd_from_client {
 		my ($chan, $msg) = @{$input->{params}};
 		my $channel = $self->{resident}->get_channel($chan) || 0;
 		
-		my $user_stub = $channel->{Users}->{lc($nick)} ||= {};
+		my $user_stub = $channel->{Users}->{nnick($nick)} ||= {};
 		$user_stub->{Flags} ||= '';
 		
 		if ($user_stub->{TimeoutUntil}) {
@@ -569,7 +569,7 @@ sub cmd_from_client {
 		
 		if ($msg =~ /^\!(([vhas]op)|sync|timeout|kick|ban|banip|unban)/i) {
 			if (!$channel || !$channel->{Registered}) {
-				$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "Error: Can only use ChanServ commands in registered channels.");
+				$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "Error: You can only use ChanServ commands in registered channels.");
 				return 0;
 			}
 			
@@ -593,7 +593,7 @@ sub cmd_from_client {
 				
 				my $user = $self->{resident}->get_user($target_nick) || 0;
 				if (!$user || !$user->{Registered}) {
-					$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "Error: Can only use xOP commands on registered users.");
+					$self->send_msg_to_channel_user($nick, $chan, 'NOTICE', "Error: You can only use xOP commands on registered users.");
 					return 0;
 				}
 				
@@ -634,8 +634,8 @@ sub cmd_from_client {
 							
 							foreach my $temp_chan (@{$self->{resident}->get_all_channel_ids()}) {
 								my $temp_channel = $self->{resident}->get_channel($temp_chan);
-								if ($temp_channel && $temp_channel->{Users} && $temp_channel->{Users}->{lc($target_nick)}) {
-									delete $temp_channel->{Users}->{lc($target_nick)};
+								if ($temp_channel && $temp_channel->{Users} && $temp_channel->{Users}->{nnick($target_nick)}) {
+									delete $temp_channel->{Users}->{nnick($target_nick)};
 									$self->{resident}->save_channel($temp_chan);
 								}
 							} # foreach channel
@@ -643,10 +643,11 @@ sub cmd_from_client {
 							if ($user->{_identified}) {
 								$self->schedule_event( '', {
 									action => sub {
-										my $route_id = $self->{ircd}->_state_user_route($target_nick);
+										my $unick = $self->{resident}->get_irc_username($target_nick);
+										my $route_id = $unick ? $self->{ircd}->_state_user_route($unick) : 0;
 										if ($route_id) {
 											$self->{ircd}->_send_output_to_client($route_id, $_)
-												for $self->{ircd}->_daemon_cmd_umode($target_nick, '-o');
+												for $self->{ircd}->_daemon_cmd_umode($unick, '-o');
 										}
 										$self->sync_all_user_modes('', $target_nick);
 									}
@@ -663,15 +664,15 @@ sub cmd_from_client {
 				else {
 					# voice, half or op in this channel
 					if ($cmd eq 'add') {
-						$channel->{Users}->{lc($target_nick)} ||= { Flags => '' };
-						$channel->{Users}->{lc($target_nick)}->{Flags} = $flag;
+						$channel->{Users}->{nnick($target_nick)} ||= { Flags => '' };
+						$channel->{Users}->{nnick($target_nick)}->{Flags} = $flag;
 						
 						$self->send_msg_to_channel( $chan, 'PRIVMSG', 
 							"User '$target_nick' added to the ".nch($chan)." Auto-".ucfirst($self->{mode_map}->{$flag})." list."
 						);
 					}
 					else {
-						delete $channel->{Users}->{lc($target_nick)};
+						delete $channel->{Users}->{nnick($target_nick)};
 						
 						$self->send_msg_to_channel( $chan, 'PRIVMSG', 
 							"User '$target_nick' removed from the ".nch($chan)." Auto-".ucfirst($self->{mode_map}->{$flag})." list." 
@@ -732,7 +733,7 @@ sub cmd_from_client {
 				# time user out (prevent speaking for N seconds)
 				my ($target_nick, $secs) = ($1, $2);
 				$secs = int( trim($secs || '') || 60 );
-				my $target_user_stub = $channel->{Users}->{lc($target_nick)} ||= {};
+				my $target_user_stub = $channel->{Users}->{nnick($target_nick)} ||= {};
 				if (!$target_user_stub->{Flags} || ($target_user_stub->{Flags} !~ /o/)) {
 					$target_user_stub->{TimeoutUntil} = time() + ($secs || 60);
 					$self->send_msg_to_channel( $chan, 'PRIVMSG', "User $target_nick has been timed out for $secs seconds." );
@@ -741,10 +742,13 @@ sub cmd_from_client {
 			
 			elsif ($msg =~ /^\!kick\s+(\w+)/i) {
 				my $target_nick = $1;
-				my $target_user_stub = $channel->{Users}->{lc($target_nick)} ||= {};
+				my $target_user_stub = $channel->{Users}->{nnick($target_nick)} ||= {};
 				if (!$target_user_stub->{Flags} || ($target_user_stub->{Flags} !~ /o/)) {
 					$target_user_stub->{TimeoutUntil} = time() + 60;
-					$self->{ircd}->daemon_server_kick( nch($chan), $target_nick, $self->{resident}->{config}->{WebServer}->{KickMessage} );
+					my $unick = $self->{resident}->get_irc_username($target_nick);
+					if ($unick) {
+						$self->{ircd}->daemon_server_kick( nch($chan), $unick, $self->{resident}->{config}->{WebServer}->{KickMessage} );
+					}
 				}
 			} # kick + timeout
 			
@@ -844,7 +848,7 @@ sub cmd_from_client {
 		} # xOp cmd
 	} # privmsg
 	
-	return 1;
+	return 1; # allow command to be processed
 }
 
 sub sync_all_user_modes {
@@ -852,7 +856,7 @@ sub sync_all_user_modes {
 	my $self = shift;
 	my $single_chan = shift || '';
 	my $single_nick = shift || '';
-	$single_nick = lc($single_nick);
+	$single_nick = nnick($single_nick);
 	
 	my $chans = $single_chan ? [lc(sch($single_chan))] : [keys %{$self->{resident}->{channels}}];
 	$self->log_debug(5, "Syncronizing ".($single_nick ? $single_nick : 'all')." user modes in channels: " . join(', ', @$chans));
@@ -868,12 +872,12 @@ sub sync_all_user_modes {
 				foreach my $unick (keys %{$record->{users}}) {
 					my $nick = $self->{ircd}->{state}->{users}->{$unick}->{nick};
 					next if $nick =~ /^ChanServ$/i;
-					next if $single_nick && ($single_nick ne lc($nick));
+					next if $single_nick && ($single_nick ne nnick($nick));
 					
 					my $cur_mode = $record->{users}->{$unick};
 					
 					# private channel and user not in list?  kick!
-					if ($channel->{Private} && !$channel->{Users}->{lc($nick)}) {
+					if ($channel->{Private} && !$channel->{Users}->{nnick($nick)}) {
 						$self->log_debug(4, "Kicking user '$nick' out of private channel \#$chan");
 						$self->{ircd}->daemon_server_kick( nch($chan), $nick, "Private Channel" );
 					}
@@ -882,7 +886,7 @@ sub sync_all_user_modes {
 						$self->{ircd}->daemon_server_kick( nch($chan), $nick, "Banned" );
 					}
 					else {
-						my $target_mode = $channel->{Users}->{lc($nick)} ? ($channel->{Users}->{lc($nick)}->{Flags} || '') : '';
+						my $target_mode = $channel->{Users}->{nnick($nick)} ? ($channel->{Users}->{nnick($nick)}->{Flags} || '') : '';
 						
 						my $user = $self->{resident}->get_user($nick);
 						if ($user && $user->{Administrator}) { $target_mode = 'o'; }
@@ -986,7 +990,6 @@ sub delete_channel {
 		my $record = $self->{ircd}->{state}{chans}{$uchan} || 0;
 		if ($record && $record->{users}) {
 			foreach my $cnick (keys %{$record->{users}}) {
-				$cnick = lc($cnick);
 				$self->log_debug(9, "Kicking $cnick out of \#$chan");
 				$self->{ircd}->daemon_server_kick( nch($chan), $cnick, "Channel has been deleted." );
 			}
@@ -998,7 +1001,7 @@ sub delete_channel {
 		$self->sync_all_user_modes($chan, '');
 		
 		# always have chanserv leave tho
-		my $cnick = 'chanserv';
+		my $cnick = 'ChanServ';
 		$self->log_debug(9, "Kicking $cnick out of \#$chan");
 		$self->{ircd}->daemon_server_kick( nch($chan), $cnick, "Channel has been deleted." );
 	}

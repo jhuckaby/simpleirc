@@ -89,7 +89,7 @@ sub get_user {
 	my $self = shift;
 	my $nick = shift;
 	my $do_create = shift || 0;
-	$nick = lc($nick);
+	$nick = nnick($nick);
 	
 	# check cache first
 	if ($self->{users}->{$nick}) { return $self->{users}->{$nick}; }
@@ -117,7 +117,8 @@ sub get_user {
 sub save_user {
 	# save user to disk
 	my ($self, $nick) = @_;
-	$nick = lc($nick);
+	$nick = nnick($nick);
+	if (!length($nick)) { return 0; }
 	
 	my $user = $self->{users}->{$nick};
 	if (!$user || !$user->{Registered}) { return 0; }
@@ -145,7 +146,7 @@ sub save_user {
 sub unload_user {
 	# free memory used by user
 	my ($self, $nick) = @_;
-	$nick = lc($nick);
+	$nick = nnick($nick);
 	
 	$self->save_user($nick);
 	delete $self->{users}->{$nick};
@@ -168,6 +169,7 @@ sub is_op {
 sub get_channel_user_flags {
 	# get EFFECTIVE channel user flags, modified by admin / founder status
 	my ($self, $chan, $nick) = @_;
+	$nick = nnick($nick);
 	
 	my $channel = $self->get_channel($chan, 0);
 	if (!$channel) { return ''; }
@@ -185,6 +187,7 @@ sub get_channel_user_flags {
 sub send_user_password_reset_email {
 	# send email to user with instructions for resetting password
 	my ($self, $nick) = @_;
+	$nick = nnick($nick);
 	my $user = $self->get_user($nick, 0);
 	if (!$user) { return 0; }
 	
@@ -352,6 +355,34 @@ sub save_data {
 	}
 	
 	return 1;
+}
+
+sub get_irc_user_record {
+	# locate user in irc server based on our normalized nick
+	# user must be currently logged into irc
+	my ($self, $nick) = @_;
+	$nick = nnick($nick);
+	
+	my $users = $self->{ircd}->{state}{users};
+	foreach my $temp_nick (keys %$users) {
+		if (nnick($temp_nick) eq $nick) { return $users->{$temp_nick}; }
+	}
+	
+	return undef;
+}
+
+sub get_irc_username {
+	# locate username in irc given our normalized nick
+	# user must be currently logged into irc
+	my ($self, $nick) = @_;
+	$nick = nnick($nick);
+	
+	my $users = $self->{ircd}->{state}{users};
+	foreach my $temp_nick (keys %$users) {
+		if (nnick($temp_nick) eq $nick) { return $temp_nick; }
+	}
+	
+	return undef;
 }
 
 sub rotate_logs {

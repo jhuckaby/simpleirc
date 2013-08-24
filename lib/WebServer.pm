@@ -7,6 +7,7 @@ use Time::Local;
 use HTTP::Date;
 use Digest::MD5 qw(md5_hex);
 use VersionInfo;
+use IRC::Utils ':ALL';
 
 my $nice_log_cat_names = {
 	transcript => 'Chat Transcript',
@@ -361,6 +362,7 @@ sub get_user_info {
 	# get info about user from irc server
 	my ($self, $nick) = @_;
 	my $info = {};
+	$nick = nnick($nick);
 	
 	$info->{Channels} = {};
 	foreach my $chan (@{$self->get_all_channel_ids()}) {
@@ -403,7 +405,7 @@ sub api_login {
 	my $self = shift;
 	my $args = {@_};
 	my $json = $args->{post};
-	my $username = lc(trim($json->{Username}));
+	my $username = nnick($json->{Username});
 	my $password = $json->{Password};
 	
 	$self->log_debug(6, "User logging in: $username");
@@ -469,6 +471,7 @@ sub api_get_user_info {
 	my $json = $args->{post};
 	my $session = $self->require_session($args) or return { Code => 'session' };
 	my $username = $session->{Username};
+	$json->{Username} = nnick($json->{Username});
 	
 	if ($json->{Username} && ($json->{Username} ne $username)) {
 		# trying to edit someone else's account -- must be admin to continue
@@ -543,7 +546,7 @@ sub api_forgot_password {
 	my $self = shift;
 	my $args = {@_};
 	my $json = $args->{post};
-	my $username = $json->{Username};
+	my $username = nnick($json->{Username});
 	
 	my $user = $self->get_user($username, 0);
 	if (!$user) { 
@@ -613,7 +616,7 @@ sub api_get_all_users {
 		}
 		
 		my $unick = uc_irc($temp_nick);
-		my $crecord = $self->{ircd}->{state}{users}{$unick} || 0;
+		my $crecord = $self->get_irc_user_record($unick);
 		if ($crecord) {
 			$row->{Ident} = $crecord->{auth}->{ident};
 			$row->{Host} = $crecord->{auth}->{hostname};
@@ -650,8 +653,15 @@ sub api_user_create {
 		return { Code => 1, Description => "You must be a server administrator to create new users." };
 	}
 	
-	$json->{Username} =~ s/\W+//g;
-	$json->{Username} = lc($json->{Username});
+	if (!is_valid_nick_name($json->{Username})) {
+		return { Code => 1, Description => "The username you entered is not a valid IRC nickname." };
+	}
+	
+	my $disp_username = $json->{Username};
+	$json->{Username} = nnick($json->{Username});
+	if (!length($json->{Username})) {
+		return { Code => 1, Description => "The username you entered is invalid (must contain alphanumerics, not in brackets)" };
+	}
 	
 	if (length($json->{Username}) > $self->{config}->{MaxNickLength}) {
 		return { Code => 1, Description => "Usernames must be " . $self->{config}->{MaxNickLength} . " characters or less." };
@@ -664,6 +674,7 @@ sub api_user_create {
 	
 	$user = $self->get_user($json->{Username}, 1);
 	
+	$user->{DisplayUsername} = $disp_username;
 	$user->{FullName} = $json->{FullName};
 	$user->{Email} = $json->{Email};
 	$user->{ID} = generate_unique_id();
@@ -688,6 +699,8 @@ sub api_user_update {
 	my $session = $self->require_session($args) or return { Code => 'session' };
 	my $username = $session->{Username};
 	my $self_admin = $self->is_admin($username);
+	
+	$json->{Username} = nnick($json->{Username});
 	
 	if ($json->{Username} && ($json->{Username} ne $username)) {
 		# trying to update someone else's account -- must be admin to continue
@@ -719,8 +732,10 @@ sub api_user_update {
 		
 		# if user is suspended, see if we have to kick out a live user	
 		if ($user->{_identified}) {
+			my $unick = $self->get_irc_username($username);
+			
 			if (($user->{Status} =~ /suspended/i)) {
-				$self->{ircd}->daemon_server_kill( $username, "Account suspended" );
+				$self->{ircd}->daemon_server_kill( $unick, "Account suspended" );
 			}
 			else {
 				if ($user->{Administrator} && !$old_user->{Administrator}) {
@@ -728,10 +743,10 @@ sub api_user_update {
 					$nickserv->auto_oper_check($username, 1, 1);
 				} # giveth admin
 				elsif (!$user->{Administrator} && $old_user->{Administrator}) {
-					my $route_id = $self->{ircd}->_state_user_route($username);
+					my $route_id = $self->{ircd}->_state_user_route($unick);
 					if ($route_id) {
 						$self->{ircd}->_send_output_to_client($route_id, $_)
-							for $self->{ircd}->_daemon_cmd_umode($username, '-o');
+							for $self->{ircd}->_daemon_cmd_umode($unick, '-o');
 					}
 				} # taketh away admin
 				
@@ -757,6 +772,8 @@ sub api_user_delete {
 	my $json = $args->{post};
 	my $session = $self->require_session($args) or return { Code => 'session' };
 	my $username = $session->{Username};
+	
+	$json->{Username} = nnick($json->{Username});
 	
 	if ($json->{Username} && ($json->{Username} ne $username)) {
 		# trying to delete someone else's account -- must be admin to continue
@@ -793,7 +810,8 @@ sub api_user_delete {
 	
 	# boot user from irc
 	if ($user->{_identified}) {
-		$self->{ircd}->daemon_server_kill( $username, "Account deleted" );
+		my $unick = $self->get_irc_username($username);
+		$self->{ircd}->daemon_server_kill( $unick, "Account deleted" );
 	}
 	
 	return {
@@ -826,7 +844,7 @@ sub api_channel_create {
 	# register it!
 	$channel->{ID} = generate_unique_id();
 	$channel->{Registered} = 1;
-	$channel->{Founder} = $json->{Founder};
+	$channel->{Founder} = nnick($json->{Founder});
 	$channel->{Users} = { lc($username) => { Flags => 'o' } };
 	$channel->{Topic} = $json->{Topic} || '';
 	$channel->{Private} = $json->{Private} || 0;
@@ -917,7 +935,7 @@ sub api_get_all_channels {
 			if ($channel->{Registered} && $self->{config}->{Plugins}->{ChanServ}->{Hide}) { $chan_info->{NumLiveUsers}--; } # chanserv
 		}
 		
-		if ($self_admin || ($channel->{Founder} eq $username) || ($flags =~ /[ho]/i)) {
+		if ($self_admin || ($channel->{Founder} eq nnick($username)) || ($flags =~ /[ho]/i)) {
 			$chan_info->{CanOp} = 1;
 		}
 		
@@ -953,12 +971,12 @@ sub api_channel_update {
 	}
 	
 	# change founder?
-	if ($json->{Founder} ne $channel->{Founder}) {
+	if (nnick($json->{Founder}) ne $channel->{Founder}) {
 		my $new_founder = $self->get_user($json->{Founder}, 0);
 		if (!$new_founder) {
 			return { Code => 1, Description => "User not found: " . $json->{Founder} };
 		}
-		$channel->{Founder} = $json->{Founder};
+		$channel->{Founder} = nnick($json->{Founder});
 	}
 	
 	my $chanserv = $self->{ircd}->plugin_get( 'ChanServ' );
@@ -1057,10 +1075,10 @@ sub api_channel_get_users {
 	
 	my $user_ids = {};
 	foreach my $temp_nick (keys %{$channel->{Users}}) {
-		$user_ids->{lc($temp_nick)} ||= 1;
+		$user_ids->{nnick($temp_nick)} ||= 1;
 	}
 	foreach my $temp_nick (keys %$cusers) {
-		$user_ids->{lc($temp_nick)} ||= 1;
+		$user_ids->{nnick($temp_nick)} ||= 1;
 	}
 	if ($self->{config}->{Plugins}->{ChanServ}->{Hide}) {
 		delete $user_ids->{chanserv};
@@ -1069,7 +1087,11 @@ sub api_channel_get_users {
 	my $users = {};
 	foreach my $temp_nick (keys %$user_ids) {
 		my $sort_level = 0;
-		my $flags = $cusers->{uc_irc($temp_nick)} || '';
+		
+		my $flags = '';
+		my $unick = $self->get_irc_username( $temp_nick );
+		if ($unick) { $flags = $cusers->{$unick} || ''; }
+		
 		if (!$flags && $channel->{Users}->{$temp_nick} && $channel->{Users}->{$temp_nick}->{Flags}) {
 			$flags = $channel->{Users}->{$temp_nick}->{Flags};
 		}
@@ -1087,9 +1109,10 @@ sub api_channel_get_users {
 	my $rows = [];
 	
 	foreach my $temp_nick (splice(@$sorted_user_ids, $query->{offset}, $query->{limit})) {
+		my $unick = $self->get_irc_username( $temp_nick );
 		my $row = {
 			Username => $temp_nick,
-			Live => defined($cusers->{uc_irc($temp_nick)}) ? 1 : 0
+			Live => $unick && defined($cusers->{$unick}) ? 1 : 0
 		};
 		
 		if ($query->{filter} && ($query->{filter} =~ /online/i) && !$row->{Live}) {
@@ -1101,8 +1124,7 @@ sub api_channel_get_users {
 			next;
 		}
 		
-		my $unick = uc_irc($temp_nick);
-		my $crecord = $self->{ircd}->{state}{users}{$unick} || 0;
+		my $crecord = $self->get_irc_user_record($temp_nick);
 		if ($crecord) {
 			$row->{Ident} = $crecord->{auth}->{ident};
 			$row->{Host} = $crecord->{auth}->{hostname};
@@ -1110,7 +1132,9 @@ sub api_channel_get_users {
 			if ($self->is_admin($username)) { $row->{IP} = $crecord->{socket}->[0]; }
 		}
 		
-		my $flags = $cusers->{uc_irc($temp_nick)} || '';
+		my $flags = '';
+		if ($unick) { $flags = $cusers->{$unick} || ''; }
+		
 		if (!$flags && $channel->{Users}->{$temp_nick} && $channel->{Users}->{$temp_nick}->{Flags}) {
 			$flags = $channel->{Users}->{$temp_nick}->{Flags};
 		}
@@ -1180,7 +1204,7 @@ sub api_channel_add_user {
 	my $username = $session->{Username};
 	
 	my $chan = lc(sch($json->{Channel}));
-	my $target_nick = lc($json->{Username});
+	my $target_nick = nnick($json->{Username});
 	
 	# get channel record
 	my $channel = $self->get_channel($chan, 0);
@@ -1229,7 +1253,7 @@ sub api_channel_set_user_mode {
 	my $username = $session->{Username};
 	
 	my $chan = lc(sch($json->{Channel}));
-	my $target_nick = lc($json->{Username});
+	my $target_nick = nnick($json->{Username});
 	my $flags = $json->{Flags};
 	
 	# get channel record
@@ -1282,7 +1306,7 @@ sub api_channel_delete_user {
 	my $username = $session->{Username};
 	
 	my $chan = lc(sch($json->{Channel}));
-	my $target_nick = lc($json->{Username});
+	my $target_nick = nnick($json->{Username});
 	
 	# get channel record
 	my $channel = $self->get_channel($chan, 0);
@@ -1332,7 +1356,7 @@ sub api_channel_kick_user {
 	my $username = $session->{Username};
 	
 	my $chan = lc(sch($json->{Channel}));
-	my $target_nick = lc($json->{Username});
+	my $target_nick = nnick($json->{Username});
 	
 	# get channel record
 	my $channel = $self->get_channel($chan, 0);
@@ -1360,7 +1384,8 @@ sub api_channel_kick_user {
 	
 	# kick
 	$self->log_debug(4, "Kicking user '$target_nick' out of channel \#$chan");
-	$self->{ircd}->daemon_server_kick( nch($chan), $target_nick, $self->{config}->{WebServer}->{KickMessage} );
+	my $unick = $self->get_irc_username( $target_nick );
+	$self->{ircd}->daemon_server_kick( nch($chan), $unick, $self->{config}->{WebServer}->{KickMessage} );
 	
 	return {
 		Code => 0
@@ -2228,15 +2253,20 @@ sub api_server_boot_user {
 		return { Code => 1, Description => "You must be a server administrator to boot users." };
 	}
 	
-	my $target_nick = $json->{Username};
-	my $route_id = $self->{ircd}->_state_user_route( uc_irc($target_nick) );
+	my $target_nick = nnick($json->{Username});
+	my $unick = $self->get_irc_username( $target_nick );
+	if (!$unick) {
+		return { Code => 1, Description => "User $target_nick is no longer connected to the IRC server." };
+	}
+	
+	my $route_id = $self->{ircd}->_state_user_route( $unick );
 	if (!$route_id || ($route_id eq 'spoofed')) {
 		return { Code => 1, Description => "User $target_nick is no longer connected to the IRC server." };
 	}
 	
 	$self->log_debug(3, "Booting user from server: $target_nick" );
 	
-	$self->{ircd}->daemon_server_kill( uc_irc($target_nick), "Booted" );
+	$self->{ircd}->daemon_server_kill( $unick, "Booted" );
 	
 	$self->log_event(
 		log => 'transcript',

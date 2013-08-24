@@ -37,7 +37,11 @@ sub send_msg_to_user {
 	$package =~ s/^(.+)::(\w+)$/$2/;
 	
 	my $route_id = $self->{ircd}->_state_user_route($nick);
-	if (!$route_id) { return; }
+	if (!$route_id) {
+		my $unick = $self->{resident}->get_irc_username( $nick );
+		if ($unick) { $route_id = $self->{ircd}->_state_user_route($unick); }
+		if (!$route_id) { return; }
+	}
 	
 	$self->log_debug(9, "Sending $type to $nick: $msg");
 	
@@ -67,7 +71,11 @@ sub send_msg_to_channel_user {
 	$package =~ s/^(.+)::(\w+)$/$2/;
 	
 	my $route_id = $self->{ircd}->_state_user_route($nick);
-	if (!$route_id) { return; }
+	if (!$route_id) {
+		my $unick = $self->{resident}->get_irc_username( $nick );
+		if ($unick) { $route_id = $self->{ircd}->_state_user_route($unick); }
+		if (!$route_id) { return; }
+	}
 	
 	$self->log_debug(9, "Sending $type to $nick in $chan: $msg");
 	
@@ -172,7 +180,7 @@ sub schedule_event {
 	my ($self, $id, $event) = @_;
 	if (!$id) { $id = generate_unique_id(); }
 	$event->{when} ||= time();
-	$self->{schedule}->{lc($id)} = $event;
+	$self->{schedule}->{nnick($id)} = $event;
 }
 
 sub log_debug {
