@@ -1190,6 +1190,7 @@ sub normalize_nick {
 	
 	my $nick = lc( trim( $nick ) );
 	$nick =~ s/\[\w+\]$//; # strip user status, e.g. MyNick[Away]
+	$nick =~ s/\{\w+\}$//; # due to a strange bug in PoCo::Server::IRC, we need to do curly braces too
 	$nick =~ s/\W+//g; # strip all non-alphanum
 	
 	# if nick is an alias, return primary username
