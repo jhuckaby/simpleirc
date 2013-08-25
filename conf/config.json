@@ -1,3 +1,6 @@
 {
-	"//": "Put your user configuration here."
+	"//": "Put your user configuration here.",
+	"WebServer": {
+		"FileUploadKey": "foobar773"
+	}
 }
