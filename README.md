@@ -39,7 +39,7 @@ The most important difference is, _your nickname is your identity_.  SimpleIRC c
 
 SimpleIRC only implements a few select user modes, to keep things simple.  Voice (+v), Half-Op (+h), and Op (+o) are the only modes supported in channels.  There is the concept of a server administrator, which gets server-wide +o (O-Line) and +o in all channels too, but appears to others as a standard Op.
 
-You can optionally configure your to require nicks and/or channels to be registered.  You can also lock it down so only server administrators can create new channels, and even make them private (invite only).  Users added to channels (given a mode, or added in the web UI) are permanently invited.
+You can optionally configure your server to require nicks and/or channels to be registered.  You can also lock it down so only server administrators can create new channels, and even make them private (invite only).  Users added to channels (given a mode, or added in the web UI) are permanently invited.
 
 ## Copyright and Legal
 
@@ -57,6 +57,7 @@ Note that this software ships with some bundled 3rd party software libraries whi
 
 SimpleIRC relies on the following non-core Perl modules, which are automatically installed, along with their prerequisites, using [cpanm](http://cpanmin.us):
 
+* POE
 * POE::Component::Server::IRC
 * POE::Component::SSLify
 * JSON
