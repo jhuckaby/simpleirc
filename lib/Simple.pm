@@ -62,6 +62,14 @@ sub init {
 	# server management
 	$self->{hostname} = get_hostname();
 	$self->{time_start} = time();
+	
+	# pre-init all user aliases
+	$self->log_debug(3, "Loading aliases for all users");
+	my $nicks = $self->get_all_user_ids();
+	foreach my $nick (@$nicks) {
+		$self->preload_user( $nick );
+	}
+	$self->log_debug(3, "Preload complete");
 }
 
 sub tick {
@@ -82,6 +90,41 @@ sub get_all_user_ids {
 	}
 	
 	return $nicks;
+}
+
+sub preload_user {
+	# initialize aliases for user, only to be called at startup
+	my $self = shift;
+	my $nick = shift;
+	$nick = nnick($nick);
+	$self->log_debug(9, "Preloading aliases for user: $nick");
+	
+	my $user_file = $self->{user_dir} . '/' . $nick . '.json';
+	my $user_raw = load_file($user_file);
+	my $user = undef;
+	
+	if ($user_raw) {
+		eval { $user = json_parse($user_raw); };
+		if ($@) {
+			$self->log_error( "Failed to parse user file: $user_file: $@" );
+			return 0;
+		}
+		
+		# update user aliases
+		if ($user->{Aliases} && @{$user->{Aliases}}) {
+			update_user_aliases( $nick, $user->{Aliases}, 0 );
+		}
+	}
+}
+
+sub check_user_exists {
+	# check if username is registered
+	my $self = shift;
+	my $nick = shift;
+	my $no_alias = shift || 0;
+	$nick = nnick($nick, $no_alias);
+	my $user_file = $self->{user_dir} . '/' . $nick . '.json';
+	return (-e $user_file);
 }
 
 sub get_user {
@@ -139,6 +182,9 @@ sub save_user {
 		$self->log_error( "Failed to save user file: $user_file: $!" );
 		return 0;
 	}
+	
+	# update user aliases
+	update_user_aliases( $nick, $user->{Aliases} || [], 1 );
 	
 	return 1;
 }
@@ -223,6 +269,39 @@ sub send_user_password_reset_email {
 	$self->save_user($nick);
 	
 	return 1;
+}
+
+sub validate_user_aliases {
+	# validate list of user aliases, making sure they are well formed and unique
+	my ($self, $username, $aliases) = @_;
+	$username = nnick($username, 'clean_only');
+	my $user_aliases = get_user_aliases();
+	
+	foreach my $alias (@$aliases) {
+		if (!is_valid_nick_name($alias)) {
+			return "Alias '$alias' is not a valid IRC nickname.";
+		}
+		
+		my $orig_alias = $alias;
+		$alias = nnick($alias, 'clean_only');
+		if (!length($alias)) {
+			return "Alias '$orig_alias' cannot be added, as it must contain alphanumeric characters.";
+		}
+		
+		if ($alias eq $username) {
+			return "Alias '$alias' is already in use.";
+		}
+		
+		if ($self->check_user_exists($alias, 1)) {
+			return "Alias '$alias' is already in use by another user.";
+		}
+		
+		if ($user_aliases->{$alias} && ($user_aliases->{$alias} ne $username)) {
+			return "Alias '$alias' is already in use by another user (".$user_aliases->{$alias}.").";
+		}
+	}
+	
+	return ''; # no error
 }
 
 sub get_all_channel_ids {

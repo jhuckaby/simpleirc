@@ -255,18 +255,29 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Users", {
 		html += get_form_table_caption( user.Password ? "Optionally enter a new password here to reset it.  Please make it secure." : "Enter a password for the account.  Please make it secure." );
 		html += get_form_table_spacer();
 		
+		// user aliases
+		html += get_form_table_row( 'User Aliases', '<textarea id="fe_eu_aliases" style="width:300px;" rows="5">'+escape_textarea_field_value( (user.Aliases || []).join("\n") )+'</textarea>' );
+		html += get_form_table_caption( "<div style=\"width:600px;\">Optionally enter one or more username aliases, one per line, to use as alternate nicknames in IRC.  The user can switch to any of these nicks and retain all their privileges.  Case insensitive.</div>");
+		html += get_form_table_spacer();
+		
 		return html;
 	},
 	
 	get_user_form_xml: function() {
 		// get user xml elements from form, used for new or edit
+		var aliases = [];
+		if ($('#fe_eu_aliases').val().match(/\S/)) {
+			aliases = trim($('#fe_eu_aliases').val()).split(/\s+/);
+		}
+		
 		var user = {
 			Username: trim($('#fe_eu_username').val().toLowerCase()),
 			Status: $('#fe_eu_status').val(),
 			FullName: trim($('#fe_eu_fullname').val()),
 			Email: trim($('#fe_eu_email').val()),
 			Password: $('#fe_eu_password').val(),
-			Administrator: parseInt( $('#fe_eu_type').val(), 10 )
+			Administrator: parseInt( $('#fe_eu_type').val(), 10 ),
+			Aliases: aliases
 		};
 		
 		return user;

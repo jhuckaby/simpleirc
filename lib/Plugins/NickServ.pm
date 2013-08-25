@@ -59,6 +59,11 @@ sub PCSI_register {
 		$cmd = "OVERRIDE " . $cmd;
 		$self->IRCD_daemon_privmsg( $ircd, \$nick, \"NickServ", \$cmd, [] );
 	} );
+	$self->add_custom_command( 'alias', sub {
+		my ($this, $nick, $cmd) = @_;
+		$cmd = "ALIAS " . $cmd;
+		$self->IRCD_daemon_privmsg( $ircd, \$nick, \"NickServ", \$cmd, [] );
+	} );
 	
 	return 1;
 }
@@ -491,6 +496,74 @@ sub IRCD_daemon_privmsg {
 			$self->send_msg_to_user($nick, 'NOTICE', "You are not logged in.");
 		}
 	} # logout
+	
+	elsif ($msg =~ /^(alias)\s+(.+)$/i) {
+		# alias management
+		my $thingy = trim($2);
+		my $user = $self->{resident}->get_user($nick);
+		
+		if ($user && $user->{_identified}) {
+			# user is logged in, proceed
+			
+			if ($thingy =~ /^add\s+(\S+)/i) {
+				my $alias = $1;
+				# add alias to user account
+				my $err_msg = $self->{resident}->validate_user_aliases($nick, [$alias]);
+				if ($err_msg) {
+					$self->send_msg_to_user($nick, 'NOTICE', $err_msg);
+					return PCSI_EAT_NONE;
+				}
+				
+				$alias = nnick($alias, 'clean_only');
+				my $user_aliases = get_user_aliases();
+				if ($user_aliases->{$alias} && ($user_aliases->{$alias} eq nnick($nick, 'clean_only'))) {
+					$self->send_msg_to_user($nick, 'NOTICE', "Alias '$alias' is already registered to your account.");
+					return PCSI_EAT_NONE;
+				}
+				
+				# okay to add
+				$user->{Aliases} ||= [];
+				push @{$user->{Aliases}}, $alias;
+				
+				$self->{resident}->save_user($nick);
+				$self->send_msg_to_user($nick, 'NOTICE', "Alias '$alias' has been successfully added to your account.");
+			}
+			elsif ($thingy =~ /^(delete|del|remove|rem)\s+(\S+)/i) {
+				my $alias = $2;
+				# delete alias associated with user
+				$alias = nnick($alias, 'clean_only');
+				if ($alias && $user->{Aliases}) {
+					my $idx = find_elem_idx($user->{Aliases}, $alias);
+					if ($idx > -1) {
+						splice( @{$user->{Aliases}}, $idx, 1 );
+						$self->{resident}->save_user($nick);
+						$self->send_msg_to_user($nick, 'NOTICE', "Alias '$alias' has been successfully removed from your account.");
+						
+						my $chanserv = $self->{ircd}->plugin_get( 'ChanServ' );
+						$chanserv->sync_all_user_modes( '', $nick );
+					}
+					else {
+						$self->send_msg_to_user($nick, 'NOTICE', "Alias '$alias' was not found on your account.");
+					}
+				}
+				else {
+					$self->send_msg_to_user($nick, 'NOTICE', "Alias not found.");
+				}
+			}
+			elsif ($thingy =~ /^list/i) {
+				# list all current aliases for user
+				if ($user->{Aliases} && @{$user->{Aliases}}) {
+					$self->send_msg_to_user($nick, 'NOTICE', "You have the following aliases registered to your account: " . join(', ', @{$user->{Aliases}}));
+				}
+				else {
+					$self->send_msg_to_user($nick, 'NOTICE', "There are no aliases currently registered to your account.");
+				}
+			}
+		} # logged in
+		else {
+			$self->send_msg_to_user($nick, 'NOTICE', "You are not logged in.");
+		}
+	} # alias
 	
 	elsif ($msg =~ /^help/i) {
 		$self->do_plugin_help($nick, $msg);

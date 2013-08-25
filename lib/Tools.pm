@@ -34,7 +34,7 @@ BEGIN
     use vars qw(@ISA @EXPORT @EXPORT_OK);
 
     @ISA		= qw(Exporter);
-    @EXPORT		= qw(XMLalwaysarray load_file save_file save_file_atomic get_hostname get_bytes_from_text get_text_from_bytes short_float commify pct pluralize alphanum ascii_table file_copy file_move generate_unique_id memory_substitute memory_lookup find_files ipv4_to_hostname hostname_to_ipv4 wget escape_js normalize_midnight yyyy_mm_dd mm_dd_yyyy yyyy get_nice_date get_nice_time follow_symlinks get_remote_ip get_user_agent strip_high merge_hashes xml_post parse_query compose_query parse_xml compose_xml decode_entities encode_entities encode_attrib_entities xpath_lookup db_query parse_cookies touch probably rand_array find_elem_idx find_object find_object_idx delete_object dumper serialize_object deep_copy trim file_get_contents file_put_contents preg_match preg_replace make_dirs_for json_parse json_compose json_compose_pretty normalize_channel nch strip_channel sch normalize_nick nnick guess_content_type remove_key_recursive find_bin);
+    @EXPORT		= qw(get_user_aliases update_user_aliases XMLalwaysarray load_file save_file save_file_atomic get_hostname get_bytes_from_text get_text_from_bytes short_float commify pct pluralize alphanum ascii_table file_copy file_move generate_unique_id memory_substitute memory_lookup find_files ipv4_to_hostname hostname_to_ipv4 wget escape_js normalize_midnight yyyy_mm_dd mm_dd_yyyy yyyy get_nice_date get_nice_time follow_symlinks get_remote_ip get_user_agent strip_high merge_hashes xml_post parse_query compose_query parse_xml compose_xml decode_entities encode_entities encode_attrib_entities xpath_lookup db_query parse_cookies touch probably rand_array find_elem_idx find_object find_object_idx delete_object dumper serialize_object deep_copy trim file_get_contents file_put_contents preg_match preg_replace make_dirs_for json_parse json_compose json_compose_pretty normalize_channel nch strip_channel sch normalize_nick nnick guess_content_type remove_key_recursive find_bin);
 	@EXPORT_OK	= qw();
 	
 	MIME::Types->new();
@@ -65,6 +65,29 @@ my $standard_binary_paths = {
 };
 foreach my $temp_bin_path (split(/\:/, $ENV{'PATH'} || '')) {
 	if ($temp_bin_path) { $standard_binary_paths->{$temp_bin_path} = 1; }
+}
+
+my $user_aliases = {};
+
+sub get_user_aliases { return $user_aliases; }
+
+sub update_user_aliases {
+	# update user alias list
+	my ($primary_username, $aliases, $clear_old) = @_;
+	$primary_username = nnick($primary_username, 'clean_only');
+	
+	# first, clear out all aliases that point at primary
+	if ($clear_old) {
+		foreach my $alias (keys %$user_aliases) {
+			if ($user_aliases->{$alias} eq $primary_username) { delete $user_aliases->{$alias}; }
+		}
+	}
+	
+	# update list
+	foreach my $alias (@$aliases) {
+		$alias = nnick($alias, 'clean_only');
+		$user_aliases->{$alias} = $primary_username;
+	}
 }
 
 sub XMLalwaysarray {
@@ -1162,9 +1185,16 @@ sub sch { return strip_channel(@_); }
 
 sub normalize_nick {
 	# normalize nickname
-	my $nick = lc( trim( shift @_ ) );
+	my $nick = shift;
+	my $clean_only = shift || 0;
+	
+	my $nick = lc( trim( $nick ) );
 	$nick =~ s/\[\w+\]$//; # strip user status, e.g. MyNick[Away]
 	$nick =~ s/\W+//g; # strip all non-alphanum
+	
+	# if nick is an alias, return primary username
+	if (!$clean_only && $user_aliases->{$nick}) { $nick = $user_aliases->{$nick}; }
+	
 	return $nick;
 }
 sub nnick { return normalize_nick(@_); }

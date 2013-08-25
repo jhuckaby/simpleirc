@@ -586,12 +586,12 @@ sub api_get_all_users {
 	my $user_ids = {};
 	
 	foreach my $temp_nick (@{$self->get_all_user_ids()}) {
-		$user_ids->{$temp_nick} ||= 1;
+		$user_ids->{$temp_nick} = $temp_nick;
 	}
 	
 	foreach my $temp_nick (keys %$irc_users) {
 		if ($irc_users->{$temp_nick}->{route_id} ne 'spoofed') {
-			$user_ids->{lc($temp_nick)} ||= 1;
+			$user_ids->{nnick($temp_nick)} = $temp_nick;
 		}
 	}
 	
@@ -601,9 +601,10 @@ sub api_get_all_users {
 	my $rows = [];
 	
 	foreach my $temp_nick (splice(@$sorted_user_ids, $query->{offset}, $query->{limit})) {
+		my $temp_irc_nick = $user_ids->{$temp_nick};
 		my $row = {
 			Username => $temp_nick,
-			Live => defined($irc_users->{uc_irc($temp_nick)}) ? 1 : 0
+			Live => defined($irc_users->{uc_irc($temp_irc_nick)}) ? 1 : 0
 		};
 		
 		if ($query->{filter} && ($query->{filter} =~ /online/i) && !$row->{Live}) {
@@ -615,7 +616,7 @@ sub api_get_all_users {
 			next;
 		}
 		
-		my $unick = uc_irc($temp_nick);
+		my $unick = uc_irc($temp_irc_nick);
 		my $crecord = $self->get_irc_user_record($unick);
 		if ($crecord) {
 			$row->{Ident} = $crecord->{auth}->{ident};
@@ -672,6 +673,11 @@ sub api_user_create {
 		return { Code => 1, Description => "User already exists: " . $json->{Username} }; 
 	}
 	
+	if ($json->{Aliases}) {
+		my $err_msg = $self->validate_user_aliases($json->{Username}, $json->{Aliases});
+		if ($err_msg) { return { Code => 1, Description => $err_msg }; }
+	}
+	
 	$user = $self->get_user($json->{Username}, 1);
 	
 	$user->{DisplayUsername} = $disp_username;
@@ -682,6 +688,7 @@ sub api_user_create {
 	$user->{Registered} = 1;
 	$user->{Status} = $json->{Status};
 	$user->{Administrator} = $json->{Administrator} || 0;
+	$user->{Aliases} = $json->{Aliases} || [];
 	
 	$self->save_user($json->{Username});
 	
@@ -715,6 +722,18 @@ sub api_user_update {
 		return { Code => 1, Description => "User not found: $username" }; 
 	}
 	my $old_user = { %$user }; # shallow copy
+	
+	if ($json->{Aliases}) {
+		my $err_msg = $self->validate_user_aliases($json->{Username}, $json->{Aliases});
+		if ($err_msg) { return { Code => 1, Description => $err_msg }; }
+		$user->{Aliases} = $json->{Aliases};
+		
+		if (!$self_admin && $user->{_identified}) {
+			# auto-set modes if user is already in channels
+			my $chanserv = $self->{ircd}->plugin_get( 'ChanServ' );
+			$chanserv->sync_all_user_modes( '', $username );
+		}
+	} # aliases
 	
 	$user->{FullName} = $json->{FullName};
 	$user->{Email} = $json->{Email};
@@ -813,6 +832,9 @@ sub api_user_delete {
 		my $unick = $self->get_irc_username($username);
 		$self->{ircd}->daemon_server_kill( $unick, "Account deleted" );
 	}
+	
+	# remove any aliases associated with account
+	update_user_aliases( $username, [], 1 );
 	
 	return {
 		Code => 0
@@ -1830,7 +1852,8 @@ sub api_upload_file {
 	my $filename = basename( $file->{filename} );
 	$filename =~ s/[^\w\-\.]+//g;
 	
-	my $dest_file = 'htdocs/files/' . yyyy_mm_dd(time(), '/') . '/' . $filename;
+	my $sub_path = yyyy_mm_dd(time(), '/') . '/' . $filename;
+	my $dest_file = 'htdocs/files/' . $sub_path;
 	make_dirs_for( $dest_file );
 	if (!save_file( $dest_file, $file->{content} )) {
 		return { Code => 1, Description => "Failed to upload file: $filename: $!" };
@@ -1838,7 +1861,7 @@ sub api_upload_file {
 	
 	my $url = $self->{config}->{WebServer}->{SSL} ? 'https://' : 'http://';
 	$url .= $args->{request}->header('Host');
-	$url .= '/files/' . $filename;
+	$url .= '/files/' . $sub_path;
 	
 	my $content = "$url\n";
 	

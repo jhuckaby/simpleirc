@@ -54,6 +54,11 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.MyAccount", {
 		html += get_form_table_caption( "Need to change your password?  Enter a new one here.  Please make it secure." );
 		html += get_form_table_spacer();
 		
+		// user aliases
+		html += get_form_table_row( 'User Aliases', '<textarea id="fe_ma_aliases" style="width:300px;" rows="5">'+escape_textarea_field_value( (user.Aliases || []).join("\n") )+'</textarea>' );
+		html += get_form_table_caption( "<div style=\"width:400px;\">Optionally enter one or more username aliases, one per line, to use as alternate nicknames in IRC.  You can switch to any of these nicks and retain all your user privileges.  Case insensitive.</div>");
+		html += get_form_table_spacer();
+		
 		html += '<tr><td colspan="2" align="center">';
 			html += '<div style="height:30px;"></div>';
 			
@@ -75,11 +80,18 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.MyAccount", {
 	save_changes: function() {
 		// save changes to user info
 		app.showProgress( 1.0, "Saving user info..." );
+		
+		var aliases = [];
+		if ($('#fe_ma_aliases').val().match(/\S/)) {
+			aliases = trim($('#fe_ma_aliases').val()).split(/\s+/);
+		}
+		
 		app.api.post( 'user_update', {
 			Username: app.username,
 			FullName: trim($('#fe_ma_fullname').val()),
 			Email: trim($('#fe_ma_email').val()),
-			Password: $('#fe_ma_password').val()
+			Password: $('#fe_ma_password').val(),
+			Aliases: aliases
 		}, [this, 'save_finish'] );
 	},
 	
