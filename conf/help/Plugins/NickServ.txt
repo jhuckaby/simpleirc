@@ -12,6 +12,7 @@ CONFIRM <code> <new_password> - Confirms password reset code and sets new passwo
 DROP <password> - Deletes your user account associated with your nickname.
 DROP <nickname> - Deletes any user account (server administrators only).
 OVERRIDE <password> - User identity override, kicks out other user, nicks you back.
+ALIAS (add|delete|list) <nickname> - Manage a list of nickname aliases you can use.
 -
 SHORTCUTS:
 -
@@ -19,5 +20,6 @@ SHORTCUTS:
 /IDENTIFY - Shortcut for /msg NickServ IDENTIFY
 /REGISTER - Shortcut for /msg NickServ REGISTER
 /OVERRIDE - Shortcut for /msg NickServ OVERRIDE
+/ALIAS - Shortcut for /msg NickServ ALIAS
 -
 End of Help
