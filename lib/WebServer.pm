@@ -1097,7 +1097,9 @@ sub api_channel_get_users {
 	
 	my $user_ids = {};
 	foreach my $temp_nick (keys %{$channel->{Users}}) {
-		$user_ids->{nnick($temp_nick)} ||= 1;
+		if (($channel->{Users}->{$temp_nick} && $channel->{Users}->{$temp_nick}->{Flags}) || $channel->{Private}) {
+			$user_ids->{nnick($temp_nick)} ||= 1;
+		}
 	}
 	foreach my $temp_nick (keys %$cusers) {
 		$user_ids->{nnick($temp_nick)} ||= 1;

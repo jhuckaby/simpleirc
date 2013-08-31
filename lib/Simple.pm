@@ -368,6 +368,15 @@ sub save_channel {
 		if ($key =~ /^_/) { delete $channel->{$key}; }
 	}
 	
+	# remove users with no flags set (public channels only)
+	if ($channel->{Users} && ref($channel->{Users}) && !$channel->{Private}) {
+		foreach my $nick (keys %{$channel->{Users}}) {
+			if (!$channel->{Users}->{$nick} || !$channel->{Users}->{$nick}->{Flags}) {
+				delete $channel->{Users}->{$nick};
+			}
+		}
+	}
+	
 	my $channel_file = $self->{channel_dir} . '/' . $chan . '.json';
 	if (!save_file_atomic( $channel_file, json_compose_pretty($channel) )) {
 		$self->log_error( "Failed to save channel file: $channel_file: $!" );
