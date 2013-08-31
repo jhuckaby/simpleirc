@@ -551,6 +551,8 @@ sub _state_register_client {
 		}
 	}
 	
+	$self->{resident}->log_debug(4, "New client connection: " . $record->{socket}[0] . " (" . $record->{auth}{hostname} . ")" );
+	
 	$self->{resident}->log_event(
 		log => 'transcript',
 		package => $record->{socket}[0],
@@ -664,7 +666,7 @@ sub run_idle_connection_check {
 		my $record = $self->{state}->{users}->{$unick};
 		my $route_id = $self->_state_user_route($unick);
 		if ($route_id && ($route_id ne 'spoofed')) {
-			if (!$record->{_last_ping} || (($now - $record->{_last_ping}) >= $self->{resident}->{config}->{IdleTimeout})) {
+			if ($record->{_last_ping} && (($now - $record->{_last_ping}) >= $self->{resident}->{config}->{IdleTimeout})) {
 				$self->{resident}->log_debug(3, "Connection for '".lc($unick)."' ($route_id) has timed out, terminating");
 				$self->_terminate_conn_error($route_id, 'Timeout');
 			} # idle timeout
