@@ -2313,6 +2313,8 @@ sub api_talk {
 	my $package = $query->{who} || 'Server';
 	my $type = $query->{type} || 'PRIVMSG';
 	
+	if ($package !~ /\!/) { $package = $package . '!~' . $package . '@' . $self->{config}->{ServerName}; }
+	
 	if (!$msg || ($msg !~ /\S/)) {
 		return { Code => 1, Description => "No message text (msg) was specified." };
 	}
