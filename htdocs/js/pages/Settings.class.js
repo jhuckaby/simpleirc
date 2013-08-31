@@ -108,6 +108,9 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 		html += get_form_table_spacer('short transparent');
 		html += get_form_table_row( 'Antiflood', '<input type="checkbox" id="fe_es_antiflood" value="1" '+(config.Antiflood ? 'checked="checked"' : '')+'/><label for="fe_es_antiflood">Enable Flood Protection</label>' );
 		html += get_form_table_caption( "This option enables 'Antiflood' mode on the server, so that users cannot flood connections with too much traffic.  Those that do so are throttled down.  It is highly recommended that you leave this enabled.");
+		html += get_form_table_spacer('short transparent');
+		html += get_form_table_row( 'Idle Timeout', '<input type="text" id="fe_es_idletimeout" size="4" placeholder="900" value="'+escape_text_field_value(config.IdleTimeout)+'"/>&nbsp;(seconds)' );
+		html += get_form_table_caption( "Enter the number of seconds to wait before closing idle connections, i.e. users who have disconnected but didn't send a proper QUIT command.  Note that if your users' IRC clients do not send proper IRC PINGs, you may need to disable this entirely by setting it to '0'.");
 		html += get_form_table_spacer();
 		
 		// NickServ Enabled
@@ -453,6 +456,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 			Port: trim($('#fe_es_portchecked').is(':checked') ? $('#fe_es_port').val() : ''),
 			ServerPassword: $('#fe_es_serverpassword').val(),
 			Antiflood: $('#fe_es_antiflood').is(':checked') ? 1 : 0,
+			IdleTimeout: trim($('#fe_es_idletimeout').val()),
 			SSL: {
 				Enabled: $('#fe_es_sslchecked').is(':checked') ? 1 : 0,
 				Port: trim($('#fe_es_sslport').val())
@@ -506,6 +510,8 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 		if (new_config.SSL.Port && (!new_config.SSL.Port.match(/^\d+$/) || (parseInt(new_config.SSL.Port, 10) < 1) || (parseInt(new_config.SSL.Port, 10) > 65535))) return app.badField('fe_es_sslport', "The SSL port number you entered appears to be invalid.  It must be a positive integer number between 1 - 65535.");
 		
 		if (!new_config.Port && !new_config.SSL.Enabled) return app.doError("You must enable either the standard IRC or secure SSL IRC services.  They cannot both be disabled.");
+		
+		if (!new_config.IdleTimeout.match(/^\d+$/)) return app.badField('fe_es_idletimeout', "The idle timeout you entered appears to be invalid.  Please enter a positive number of seconds, or '0' to disable.");
 		
 		if (!new_config.Plugins.NickServ.RegTimeout) return app.badField('fe_es_ns_regtimeout', "You must enter the number of seconds for the nickname management registration / identification time limit.");
 		if (!new_config.Plugins.NickServ.RegTimeout.match(/^\d+$/)) return app.badField('fe_es_ns_regtimeout', "The time limit you entered appears to be invalid.  Please enter a positive number of seconds.");

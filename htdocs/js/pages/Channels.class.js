@@ -451,9 +451,9 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 				actions.push( '<span class="link" onMouseUp="$P().kick_channel_user('+idx+')"><b>Kick</b></span>' );
 			}
 			actions.push( '<span class="link" onMouseUp="$P().ban_channel_user('+idx+')"><b>Ban</b></span>' );
-			if (user.Registered) {
+			// if (user.Registered) {
 				actions.push( '<span class="link" onMouseUp="$P().delete_channel_user('+idx+')"><b>Remove</b></span>' );
-			}
+			// }
 			
 			var username_open = '';
 			var username_close = '';

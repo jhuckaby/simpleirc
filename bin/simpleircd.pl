@@ -605,6 +605,15 @@ sub tick {
 		$self->{resident}->save_data();
 	}
 	
+	# terminate idle connections
+	if ($self->{resident}->{config}->{IdleTimeout}) {
+		my $min_code = int( time() / 60 );
+		if (!$self->{resident}->{data}->{LastIdleTimeoutCheck} || ($min_code ne $self->{resident}->{data}->{LastIdleTimeoutCheck})) {
+			$self->run_idle_connection_check();
+			$self->{resident}->{data}->{LastIdleTimeoutCheck} = $min_code;
+		}
+	}
+	
 	# check for restart / stop
 	if ($self->{resident}->{ctl_cmd_at_next_tick}) {
 		my $cmd = $self->{resident}->{ctl_cmd_at_next_tick};
@@ -646,6 +655,23 @@ sub tick {
 	return 1;
 }
 
+sub run_idle_connection_check {
+	# kill idle connections that haven't sent a PING in some time
+	my $self = shift;
+	my $now = time();
+	
+	foreach my $unick (keys %{$self->{state}->{users}}) {
+		my $record = $self->{state}->{users}->{$unick};
+		my $route_id = $self->_state_user_route($unick);
+		if ($route_id && ($route_id ne 'spoofed')) {
+			if (!$record->{_last_ping} || (($now - $record->{_last_ping}) >= $self->{resident}->{config}->{IdleTimeout})) {
+				$self->{resident}->log_debug(3, "Connection for '".lc($unick)."' ($route_id) has timed out, terminating");
+				$self->_terminate_conn_error($route_id, 'Timeout');
+			} # idle timeout
+		} # not spoofed
+	} # foreach user
+}
+
 sub run_daily_maintenance {
 	# expire old nicks, remove expired bans, reset daily stats, etc.
 	my $self = shift;
@@ -673,7 +699,7 @@ sub run_daily_maintenance {
 					TargetUser => $ban->{TargetUser},
 					TargetIP => $ban->{TargetIP}
 				} );
-				delete_object( $self->{ircd}->{state}{klines}, {
+				delete_object( $self->{state}->{klines}, {
 					user => $ban->{TargetUser},
 					host => $ban->{TargetIP}
 				} );
@@ -1182,9 +1208,12 @@ sub _cmd_from_client {
 	# overriding POE::Component::Server::IRC::_cmd_from_client
 	# so we can log everything, and for plugins to hook it
 	my ($self, $wheel_id, $input) = @_;
+	my $now = time();
 	
 	if ($input->{raw_line}) {
 		my $nick = $self->_client_nickname($wheel_id);
+		my $record = $self->{state}{users}{uc_irc($nick)};
+		$record->{_last_ping} = $now; # any traffic == 'ping' in our eyes
 		
 		# pass command along to all plugins (i.e. NickServ)
 		my $plugins = $self->plugin_list();
@@ -1201,8 +1230,13 @@ sub _cmd_from_client {
 			} # plugin has cmd_from_client
 		} # foreach plugin
 		
-		if ($input->{command} ne 'PING') {
-			if ($self->{resident}->{config}->{Logging}->{LogPrivateMessages} || ($input->{raw_line} !~ /^(PRIVMSG|NS|CS|NICKSERV|CHANSERV|IDENTIFY|REGISTER)\s+\w+/)) {
+		if ($input->{command} eq 'PING') {
+			# keep user connected by recording ping times
+			$self->{resident}->log_debug(9, "Received PING from $nick");
+		} # ping
+		else {
+			# not ping
+			if ($self->{resident}->{config}->{Logging}->{LogPrivateMessages} || ($input->{raw_line} !~ /^(PRIVMSG|NS|CS|NICKSERV|CHANSERV|IDENTIFY|REGISTER|OVERRIDE)\s+\w+/)) {
 				my $record = $self->{state}{conns}{$wheel_id};
 				$self->{resident}->log_event(
 					log => 'transcript',
@@ -1226,7 +1260,6 @@ sub _cmd_from_client {
 		
 		if ($input->{command} eq 'PRIVMSG') {
 			# if user is away but is now talking, remove away status
-			my $record = $self->{state}{users}{uc_irc($nick)};
 			if ($record->{away}) { $self->_daemon_cmd_away($nick); }
 		}
 		
