@@ -1237,14 +1237,25 @@ sub _cmd_from_client {
 		else {
 			# not ping
 			if ($self->{resident}->{config}->{Logging}->{LogPrivateMessages} || ($input->{raw_line} !~ /^(PRIVMSG|NS|CS|NICKSERV|CHANSERV|IDENTIFY|REGISTER|OVERRIDE)\s+\w+/)) {
-				my $record = $self->{state}{conns}{$wheel_id};
-				$self->{resident}->log_event(
-					log => 'transcript',
-					package => ($record && $record->{socket}) ? $record->{socket}->[0] : '',
-					# level => $self->state_user_full($nick),
-					level => $nick,
-					msg => $input->{raw_line}
-				);
+				
+				# do not log in private channels
+				my $ok_log = 1;
+				if ($input->{raw_line} =~ /^PRIVMSG\s+\#(\S+)/) {
+					my $chan = $1;
+					my $channel = $self->{resident}->get_channel($chan, 0);
+					if ($channel && $channel->{Registered} && $channel->{Private}) { $ok_log = 0; }
+				}
+				
+				if ($ok_log) {
+					my $record = $self->{state}{conns}{$wheel_id};
+					$self->{resident}->log_event(
+						log => 'transcript',
+						package => ($record && $record->{socket}) ? $record->{socket}->[0] : '',
+						# level => $self->state_user_full($nick),
+						level => $nick,
+						msg => $input->{raw_line}
+					);
+				} # ok to log
 				
 				my $user = $self->{resident}->get_user($nick, 0);
 				if ($user) {
