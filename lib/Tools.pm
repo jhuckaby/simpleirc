@@ -1156,15 +1156,18 @@ sub make_dirs_for {
 }
 
 sub json_parse {
+	# Expects UTF-8 encoded text
 	return decode_json( $_[0] );
 }
 
 sub json_compose {
+	# produces UTF-8 encoded text
 	return encode_json( $_[0] );
 }
 
 sub json_compose_pretty {
-	return to_json( $_[0], { pretty => 1 } );
+	# produces UTF-8 encoded text
+	return to_json( $_[0], { pretty => 1, utf8  => 1 } );
 }
 
 sub normalize_channel {
