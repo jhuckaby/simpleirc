@@ -297,13 +297,43 @@ sub IRCD_daemon_privmsg {
 		delete $self->{schedule}->{nnick($nick)};
 	} # identify
 	
+	elsif ($msg =~ /^(setpass)\s+(\S+)\s+(\S+)$/i) {
+		# change password
+		my $old_pass = $2;
+		my $new_pass = $3;
+		my $user = $self->{resident}->get_user($nick, 1);
+		
+		if (!$user->{_identified}) {
+			$self->send_msg_to_user($nick, 'NOTICE', "You are not logged in.");
+			return PCSI_EAT_NONE;
+		}
+		if ($user->{Status} && ($user->{Status} =~ /suspended/i)) {
+			$self->send_msg_to_user($nick, 'NOTICE', "The '$nick' user account is suspended, and cannot be accessed at this time.");
+			return PCSI_EAT_NONE;
+		}
+		if (!$user->{Registered}) {
+			# user is not registered
+			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' has not yet been registered. Please type: /msg nickserv register PASSWORD EMAIL");
+			return PCSI_EAT_NONE;
+		}
+		if (md5_hex($old_pass . $user->{ID}) ne $user->{Password}) {
+			$self->send_msg_to_user($nick, 'NOTICE', "Error: Incorrect password for '$nick'. If you have forgotten your password, please type: /msg nickserv recover EMAIL");
+			return PCSI_EAT_NONE;
+		}
+		
+		$user->{Password} = md5_hex($new_pass . $user->{ID});
+		$self->{resident}->save_user($nick);
+		
+		$self->send_msg_to_user($nick, 'NOTICE', "Your password has been successfully changed.");
+	} # setpass
+	
 	elsif ($msg =~ /^(override)\s+(.+)$/i) {
 		# override nick identity, kick out the other guy
 		my $password = $2;
 		my $user = $self->{resident}->get_user($nick, 1);
 		
 		if ($user->{_identified}) {
-			$self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' is already identified.");
+			# $self->send_msg_to_user($nick, 'NOTICE', "Nick '$nick' is already identified.");
 			return PCSI_EAT_NONE;
 		}
 		if ($user->{Status} && ($user->{Status} =~ /suspended/i)) {
@@ -311,9 +341,9 @@ sub IRCD_daemon_privmsg {
 			return PCSI_EAT_NONE;
 		}
 		
-		if (!$user->{Registered} && ($nick =~ /_$/)) {
-			# user is not registered
-			my $std_nick = $nick; $std_nick =~ s/_$//;
+		if (!$user->{Registered} && ($nick =~ /_+$/)) {
+			# user is not registered, good (i.e. is a ghost temp user)
+			my $std_nick = $nick; $std_nick =~ s/_+$//;
 			my $std_user = $self->{resident}->get_user($std_nick, 0);
 			if ($std_user && $std_user->{Registered} && (md5_hex($password . $std_user->{ID}) eq $std_user->{Password})) {
 				# very special case: user trying to identify as 'nick_', and is not registered,
