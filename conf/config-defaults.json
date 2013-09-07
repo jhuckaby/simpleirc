@@ -8,7 +8,7 @@
 	"Port" : 6667,
 	"ServerPassword": "",
 	"Antiflood": 1,
-	"IdleTimeout": 900,
+	"IdleTimeout": 0,
 	
 	"ServerBanDays" : 90,
 	"SecretKey" : "jf7sJFG4500000_",
