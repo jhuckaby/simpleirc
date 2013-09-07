@@ -299,7 +299,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Channels", {
 	get_channel_form_xml: function() {
 		// get channel xml elements from form, used for new or edit
 		var channel = {
-			Name: trim($('#fe_ec_name').val().toLowerCase().replace(/\W+/g, '')),
+			Name: trim($('#fe_ec_name').val().toLowerCase().replace(/^\#+/, '')),
 			Topic: trim($('#fe_ec_topic').val()),
 			URL: trim($('#fe_ec_url').val()),
 			JoinNotice: trim($('#fe_ec_joinnotice').val()),
