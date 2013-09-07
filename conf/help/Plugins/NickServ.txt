@@ -9,6 +9,7 @@ IDENTIFY <password> - Identifies you as the nickname owner, and logs you in.
 LOGOUT - Logs you out.  Will also remove all your channel privileges.
 RECOVER <email> - Sends password recovery information via e-mail.
 CONFIRM <code> <new_password> - Confirms password reset code and sets new password.
+SETPASS <oldpass> <newpass> - Change your password.
 DROP <password> - Deletes your user account associated with your nickname.
 DROP <nickname> - Deletes any user account (server administrators only).
 OVERRIDE <password> - User identity override, kicks out other user, nicks you back.
