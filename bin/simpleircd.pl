@@ -1083,6 +1083,11 @@ sub _daemon_cmd_userinfo {
 		if ($is_admin) { push @$lines, "User '$target_nick' is registered to: " . $user->{FullName} . " <" . $user->{Email} . ">"; }
 		else { push @$lines, "User '$target_nick' is registered."; }
 		
+		# aliases
+		if ($user->{Aliases} && @{$user->{Aliases}}) {
+			push @$lines, "Aliases: " . join(', ', @{$user->{Aliases}});
+		}
+		
 		# identified
 		if ($user->{_identified}) { push @$lines, "User is currently logged in."; }
 		else { push @$lines, "User is not logged in."; }
