@@ -311,7 +311,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 		html += '<div class="info_label">LATEST ' + this.version.Branch.toUpperCase() + ' VERSION</div>';
 		
 		if (remote_version.BuildID != this.version.BuildID) {
-			html += '<div class="info_value" style="color:red;">v' + remote_version.Major + '-' + remote_version.Minor + ' (' + remote_version.BuildID.substring(0,8) + ')</div>';
+			html += '<div class="info_value"><a href="http://effectsoftware.com/software/simpleirc/changelog-'+this.version.Branch+'.txt" target="_blank">v' + remote_version.Major + '-' + remote_version.Minor + ' (' + remote_version.BuildID.substring(0,8) + ')</a></div>';
 			html += '<div class="button center" style="margin-bottom:8px" onMouseUp="$P().ask_upgrade()">Upgrade...</div>';
 		}
 		else {
