@@ -1614,13 +1614,29 @@ sub api_channel_delete_ban {
 sub api_logs {
 	# fetch logs from live or archives, with search criteria
 	# return as HTML or raw text
+	# Shortcut URI for channel transcript: /api/logs/transcript/myroom/10000
 	my $self = shift;
 	my $args = {@_};
 	my $query = $args->{query};
 	my $session = $self->require_session($args) or return { Code => 'session', Description => 'Your session is invalid or has timed out.  Please return to the main site, log in, then try your log search again.' };
 	my $username = $session->{Username};
 	
-	if (!$self->is_admin($username)) {
+	if ($args->{uri} =~ m@/api/logs/(\w+)/(\w+)/(\w+)@) {
+		$query->{cat} = $1;
+		$query->{chan} = $2;
+		$query->{recent} = $3;
+		$query->{format} = 'html';
+	}
+	
+	if ($query->{chan}) {
+		my $flags = $self->get_channel_user_flags( $query->{chan}, $username );
+		if ($flags !~ /[ho]/) {
+			return { Code => 1, Description => "You do not have sufficient access privileges to view the ".nch($query->{chan})." transcript." };
+		}
+		$query->{cat} = 'transcript';
+		$query->{filter} = "PRIVMSG " . nch($query->{chan});
+	}
+	elsif (!$self->is_admin($username)) {
 		return { Code => 1, Description => "You must be a server administrator to view the logs." };
 	}
 	
@@ -1631,6 +1647,10 @@ sub api_logs {
 	my $rows = [];
 	my $content_type = '';
 	my $content = '';
+	
+	if ($query->{recent}) {
+		$query->{date} = yyyy_mm_dd(time(), '/');
+	}
 	
 	if ($query->{date} eq yyyy_mm_dd(time(), '/')) {
 		# today's log, pull from live location, no gunzip needed
@@ -1649,8 +1669,13 @@ sub api_logs {
 	$query->{date} =~ /(\d{4})\D+(\d{2})\D+(\d{2})/;
 	my ($yyyy, $mm, $dd) = ($1, $2, $3);
 	my $midnight = timelocal( 0, 0, 0, int($dd), int($mm) - 1, int($yyyy) - 1900 );
-	my $start_epoch = $midnight + $query->{time_start};
-	my $end_epoch = $midnight + $query->{time_end};
+	my $start_epoch = $midnight + ($query->{time_start} || 0);
+	my $end_epoch = $midnight + ($query->{time_end} || 0);
+	
+	if ($query->{recent}) {
+		$start_epoch = time() - $query->{recent};
+		$end_epoch = time();
+	}
 	
 	if ($log_fh) {
 		my $regex = $query->{filter} || '.+';
@@ -1701,6 +1726,7 @@ sub api_logs {
 		
 		$data .= '<tr>';
 		foreach my $col (@$col_headers) {
+			next if $col =~ /^(PID|Category)$/;
 			$data .= '<th>' . $col . '</th>';
 		}
 		$data .= '</tr>' . "\n";
@@ -1709,11 +1735,15 @@ sub api_logs {
 			$data .= '<tr>';
 			my $idx = 0;
 			foreach my $col (@$row) {
+				if (($idx == 2) || ($idx == 3)) { $idx++; next; }
 				$data .= ($idx < 6) ? '<td style="white-space:nowrap;">' : '<td>';
 				
 				my $closer = '';
 				if ($idx == 5) { $data .= '<b>'; $closer = '</b>'; }
-				elsif ($idx == 6) { $data .= '<span style="font-family:monospace;">'; $closer = '</span>'; }
+				elsif ($idx == 6) {
+					$data .= '<span style="font-family:monospace;">'; $closer = '</span>'; 
+					if ($query->{chan}) { $col =~ s/^PRIVMSG\s+\#\S+\s+\://; }
+				}
 				
 				$data .= encode_entities($col);
 				$data .= $closer;
@@ -1726,13 +1756,16 @@ sub api_logs {
 			$data .= '<tr><td colspan="7" align="center" style="padding:10px 0px 10px 0px; font-weight:bold;">No rows found.</td></tr>';
 		}
 		
+		my $nice_filter = $query->{filter} || '(None)';
+		if ($query->{chan}) { $nice_filter = "Channel " . nch($query->{chan}); }
+		
 		my $args = {
 			%$query,
 			cat => $nice_log_cat_names->{$query->{cat}},
 			title => $self->{config}->{ServerDesc},
 			date => get_nice_date( $midnight ),
 			time => get_nice_time($start_epoch, 1) . ' to ' . get_nice_time($end_epoch - 1, 1),
-			filter => $query->{filter} || '(None)',
+			filter => $nice_filter,
 			data => $data
 		};
 		
