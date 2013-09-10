@@ -372,7 +372,7 @@ sub memory_substitute {
 	
 	while ($content =~ m/\[([\w\/\-\:]+)\s*\]/) {
 		my $param_name = $1;
-		$content =~ s/\[([\w\/\-\:]+)\s*\]/ memory_lookup($param_name, $args) /e;
+		$content =~ s/\[([\w\/\-\:]+)\s*\]/ memory_lookup($param_name, $args, 'noref') /e;
 	} # foreach simple tag
 	
 	return $content;
@@ -382,12 +382,16 @@ sub memory_lookup {
 	##
 	# Walk memory tree using virtual directory syntax and return value found
 	##
-	my ($param_name, $param) = @_;
+	my $param_name = shift;
+	my $param = shift;
+	my $noref = shift || 0;
 	
 	while (($param_name =~ s/^\/([\w\-\:]+)//) && ref($param)) {
 		if (ref($param) eq 'HASH') { $param = $param->{$1}; }
 		elsif (ref($param) eq 'ARRAY') { $param = ${$param}[$1]; }
 	}
+	
+	if (ref($param) && $noref) { $param = ''; }
 	
 	return $param;
 }

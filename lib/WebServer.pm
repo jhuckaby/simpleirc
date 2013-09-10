@@ -1739,7 +1739,10 @@ sub api_logs {
 				$data .= ($idx < 6) ? '<td style="white-space:nowrap;">' : '<td>';
 				
 				my $closer = '';
-				if ($idx == 5) { $data .= '<b>'; $closer = '</b>'; }
+				if ($idx == 5) { 
+					$data .= '<b>'; $closer = '</b>';
+					if ($query->{chan}) { $col =~ s/\!.+$//; }
+				}
 				elsif ($idx == 6) {
 					$data .= '<span style="font-family:monospace;">'; $closer = '</span>'; 
 					if ($query->{chan}) { $col =~ s/^PRIVMSG\s+\#\S+\s+\://; }
