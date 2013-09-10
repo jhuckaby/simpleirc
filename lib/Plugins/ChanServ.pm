@@ -546,6 +546,12 @@ sub cmd_from_client {
 		my ($chan, $msg) = @{$input->{params}};
 		my $channel = $self->{resident}->get_channel($chan) || 0;
 		
+		# JH 2013-09-10 If channel is not registered, STOP PROCESSING NOW
+		# All of this stuff should be for registered channels only
+		if (!$channel || !$channel->{Registered}) {
+			return 1; # allow command to be processed
+		}
+		
 		my $user_stub = $channel->{Users}->{nnick($nick)} ||= {};
 		$user_stub->{Flags} ||= '';
 		
