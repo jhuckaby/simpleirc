@@ -164,6 +164,13 @@ sub schedule_idle {
 	
 	foreach my $id (keys %{$self->{schedule}}) {
 		my $event = $self->{schedule}->{$id};
+		
+		if (!$event->{when} || !$event->{action}) {
+			$self->log_debug(9, "Warning: Bad schedule entry, removing it: " . json_compose($event));
+			delete $self->{schedule}->{$id};
+			next;
+		}
+		
 		if ($now >= $event->{when}) {
 			my $func = $event->{action};
 			

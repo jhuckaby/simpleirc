@@ -368,6 +368,9 @@ sub IRCD_daemon_privmsg {
 									$self->log_debug(9, "Phase 3: Re-identifying as '$std_nick'");
 									my $cmd = "IDENTIFY " . $password;
 									$self->IRCD_daemon_privmsg( $ircd, \$std_nick, \"NickServ", \$cmd, [] );
+									
+									delete $self->{schedule}->{nnick($nick)};
+									delete $self->{schedule}->{nnick($std_nick)};
 								}
 							}
 						} );
