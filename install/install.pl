@@ -143,7 +143,7 @@ if ($first_install) {
 	print ascii_box( "NEW ADMINISTRATOR LOGIN INFO:\n     Username: $admin_username\n     Password: $admin_password", "*", "     ", "     " );
 	
 	# print info on ports, url for web interface
-	my $real_ip = trim(`curl -s http://effectsoftware.com/software/tools/remote_ip.php`) || '127.0.0.1';
+	my $real_ip = trim(`curl -s http://apps.effectsoftware.com/software/tools/remote_ip.php`) || '127.0.0.1';
 	print "\nYour IRC server can be reached on port: 6667\n";
 	print "The web admin UI URL is: http://$real_ip" . (($best_port ne 80) ? ":$best_port" : "") . "/\n";
 	
