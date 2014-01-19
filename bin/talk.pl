@@ -4,7 +4,7 @@
 # talk.pl
 # IRCSimple v1.0 Command-line IRC message post tool
 # Posts any text to your running SimpleIRC server (requires web interface)
-# Copyright (c) 2013 Joseph Huckaby and EffectSoftware.com
+# Copyright (c) 2013 Joseph Huckaby and PixlCore.com
 # Released under the MIT License.
 # 
 # Usage:

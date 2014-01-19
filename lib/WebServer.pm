@@ -236,7 +236,7 @@ sub api_check_version {
 	my $query = $args->{query};
 	my $branch = $query->{branch};
 	
-	my $resp = wget("http://effectsoftware.com/software/simpleirc/version-$branch.json", 5);
+	my $resp = wget("http://pixlcore.com/software/simpleirc/version-$branch.json", 5);
 	if ($resp->is_success()) {
 		my $json_raw = $resp->content();
 		my $json = undef;
@@ -1984,7 +1984,7 @@ sub api_server_upgrade {
 	my $branch = $json->{branch} || $current_version->{Branch};
 	
 	# make sure branch exists
-	my $version_url = "http://effectsoftware.com/software/simpleirc/version-$branch.json";
+	my $version_url = "http://pixlcore.com/software/simpleirc/version-$branch.json";
 	my $resp = wget( $version_url );
 	if (!$resp->is_success()) { return { Code => 1, Description => "Could not fetch version information file for branch: $branch" }; }
 	

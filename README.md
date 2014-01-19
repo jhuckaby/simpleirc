@@ -21,11 +21,11 @@ Features at a glance:
 
 To install SimpleIRC, execute this command as root on your server:
 
-    curl -s "http://effectsoftware.com/software/simpleirc/install-latest-stable.txt" | bash
+    curl -s "http://pixlcore.com/software/simpleirc/install-latest-stable.txt" | bash
 
 Or, if you don't have curl, you can use wget:
 
-    wget -O - "http://effectsoftware.com/software/simpleirc/install-latest-stable.txt" | bash
+    wget -O - "http://pixlcore.com/software/simpleirc/install-latest-stable.txt" | bash
 
 This will install the latest stable version of SimpleIRC.  Change the word "stable" to "dev" to install the development branch.  This single command installer should work fine on any modern Linux RedHat (RHEL, Fedora, CentOS) or Debian (Ubuntu) operating system.  Basically, anything that has "yum" or "apt-get" should be happy.  See the [manual installation instructions](https://github.com/jhuckaby/simpleirc/wiki/Manual-Installation) for other OSes, or if the single-command installer doesn't work for you.
 
@@ -43,7 +43,7 @@ You can optionally configure your server to require nicks and/or channels to be 
 
 ## Copyright and Legal
 
-SimpleIRC is copyright (c) 2013 by Joseph Huckaby and EffectSoftware.com.  It is released under the MIT License (see below).
+SimpleIRC is copyright (c) 2013 by Joseph Huckaby and PixlCore.com.  It is released under the MIT License (see below).
 
 Note that this software ships with some bundled 3rd party software libraries which have different licenses:
 

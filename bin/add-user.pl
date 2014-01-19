@@ -3,7 +3,7 @@
 ##
 # add-user.pl
 # IRCSimple v1.0 Command-line IRC user creation tool.
-# Copyright (c) 2013 Joseph Huckaby and EffectSoftware.com
+# Copyright (c) 2013 Joseph Huckaby and PixlCore.com
 # Released under the MIT License.
 # 
 # Usage:

@@ -1,6 +1,6 @@
 ##
 # NickServ Bot for SimpleIRC 1.0
-# Copyright (c) 2013 Joseph Huckaby and EffectSoftware.com
+# Copyright (c) 2013 Joseph Huckaby and PixlCore.com
 ##
 
 package POE::Component::Server::IRC::Plugin::NickServ;

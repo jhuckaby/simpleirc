@@ -2,7 +2,7 @@
 
 # SimpleIRC Uninstaller
 # by Joseph Huckaby
-# Copyright (c) 2013 EffectSoftware.com
+# Copyright (c) 2013 PixlCore.com
 
 use strict;
 use FileHandle;

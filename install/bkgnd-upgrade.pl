@@ -3,7 +3,7 @@
 # SimpleIRC Background Updater
 # Automatically invoked by web service
 # by Joseph Huckaby
-# Copyright (c) 2013 EffectSoftware.com
+# Copyright (c) 2013 PixlCore.com
 
 use strict;
 use FileHandle;
@@ -42,7 +42,7 @@ open( STDOUT, ">/dev/null" );
 
 log_msg("Initiating upgrade for $branch");
 
-my $script_url = "http://effectsoftware.com/software/simpleirc/install-latest-$branch.txt";
+my $script_url = "http://pixlcore.com/software/simpleirc/install-latest-$branch.txt";
 log_msg("Fetching URL: $script_url");
 my $script_resp = wget($script_url);
 if (!$script_resp->is_success()) { death("Failed to fetch URL: $script_url: " . trim($script_resp->status_line()) . "\n"); }

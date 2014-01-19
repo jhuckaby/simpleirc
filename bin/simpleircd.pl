@@ -3,7 +3,7 @@
 ##
 # IRCSimple v1.0
 # A simple IRC server implementation with built-in NickServ and ChanServ
-# Copyright (c) 2013 Joseph Huckaby and EffectSoftware.com
+# Copyright (c) 2013 Joseph Huckaby and PixlCore.com
 # Released under the MIT License.
 ##
 
@@ -627,7 +627,7 @@ sub tick {
 			my $branch = trim($1 || '') || $current_version->{Branch};
 			
 			# make sure branch exists
-			my $version_url = "http://effectsoftware.com/software/simpleirc/version-$branch.json";
+			my $version_url = "http://pixlcore.com/software/simpleirc/version-$branch.json";
 			my $resp = wget( $version_url );
 			if (!$resp->is_success()) {
 				$self->{resdident}->log_debug(1, "Could not fetch version information file for branch: $branch: $version_url");
