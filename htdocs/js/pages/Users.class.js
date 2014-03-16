@@ -101,7 +101,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Users", {
 	receive_user: function(resp, tx) {
 		// edit existing user
 		var html = '';
-		app.setWindowTitle( "Editing User \"" + (resp.User.DisplayUsername || this.args.username) + "\"" );
+		app.setWindowTitle( "Editing User \"" + (this.args.username) + "\"" );
 		this.div.removeClass('loading');
 		
 		html += this.getSidebarTabs( 'edit',
@@ -112,7 +112,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Users", {
 			]
 		);
 		
-		html += '<div style="padding:20px;"><div class="subtitle">Editing User "' + (resp.User.DisplayUsername || this.args.username) + '"</div></div>';
+		html += '<div style="padding:20px;"><div class="subtitle">Editing User "' + (this.args.username) + '"</div></div>';
 		
 		html += '<div style="padding:0px 20px 50px 20px">';
 		html += '<center>';
@@ -226,7 +226,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Users", {
 		var user = this.user;
 		
 		// user id
-		html += get_form_table_row( 'Nickname', '<input type="text" id="fe_eu_username" size="20" value="'+escape_text_field_value(user.DisplayUsername || user.Username)+'"/>' );
+		html += get_form_table_row( 'Nickname', '<input type="text" id="fe_eu_username" size="20" value="'+escape_text_field_value(user.Username)+'"/>' );
 		html += get_form_table_caption( "Enter the IRC nickname which identifies this account.  Once entered, it cannot be changed. " );
 		html += get_form_table_spacer();
 		
@@ -336,7 +336,7 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Users", {
 			if (user.Live) actions.push( '<span class="link" onMouseUp="$P().boot_user('+idx+')"><b>Boot</b></span>' );
 			if (user.Registered) {
 				return [
-					'<div class="td_big"><a href="#Users?sub=edit&username='+user.Username+'">' + (user.DisplayUsername || user.Username) + '</a></div>',
+					'<div class="td_big"><a href="#Users?sub=edit&username='+user.Username+'">' + this.get_user_disp(user) + '</a></div>',
 					user.FullName,
 					user.Live ? '<span class="color_label online">Yes</span>' : '<span class="color_label offline">No</span>',
 					user.IP ? user.IP : 'n/a',
@@ -366,6 +366,15 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Users", {
 		html += '</div>'; // sidebar tabs
 		
 		this.div.html( html );
+	},
+	
+	get_user_disp: function(user) {
+		// get username and display name, suitable for display
+		var text = user.Username;
+		if (user.DisplayUsername && (user.DisplayUsername != user.Username)) {
+			text += '&nbsp;(' + user.DisplayUsername + ')';
+		}
+		return text;
 	},
 	
 	set_user_list_filter: function(filter) {

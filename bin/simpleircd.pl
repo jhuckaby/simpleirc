@@ -396,6 +396,20 @@ sub _default {
 			if ($route_id ne 'spoofed') {
 				my $record = $heap->{ircd}->{state}{conns}{$route_id};
 				
+				# check for nick collision
+				my $num_matches = 0;
+				foreach my $irc_username (keys %{$heap->{ircd}->{state}{users}}) {
+					if (nnick($nick) eq nnick($irc_username)) { $num_matches++; }
+				}
+				if ($num_matches > 1) {
+					# nick collision, attempt to rename
+					my $new_nick = $nick;
+					while ($resident->get_irc_username($new_nick)) { $new_nick .= '_'; }
+					$resident->log_debug(9, "Nick collision, renaming $nick to $new_nick");
+					$heap->{ircd}->_daemon_cmd_nick( $nick, $new_nick );
+					return;
+				}
+				
 				$resident->log_event(
 					log => 'transcript',
 					package => $record->{socket}[0],
@@ -1195,7 +1209,7 @@ sub _state_user_invited {
 	my $user = $self->{resident}->get_user($nick, 0) || {};
 	my $channel = $self->{resident}->get_channel( $chan );
 	
-	if ($channel->{Private} && $channel->{Users}->{lc($nick)} && $user->{Registered} && $user->{_identified}) {
+	if ($channel->{Private} && $channel->{Users}->{nnick($nick)} && $user->{Registered} && $user->{_identified}) {
 		# perma-invite for members
 		return 1; 
 	}
