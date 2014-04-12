@@ -1249,7 +1249,7 @@ sub api_channel_add_user {
 	}
 	
 	# make sure user isn't already in channel
-	if ($channel->{Users}->{$target_nick}) {
+	if ($channel->{Users}->{$target_nick} && $channel->{Users}->{$target_nick}->{Flags}) {
 		return { Code => 1, Description => "The username you entered is already a member of the channel." };
 	}
 	
