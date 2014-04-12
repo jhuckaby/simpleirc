@@ -330,13 +330,14 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Users", {
 			html += '<div class="clear"></div>';
 		html += '</div>';
 		
+		var self = this;
 		html += this.getPaginatedTable( resp, cols, 'user', function(user, idx) {
 			var actions = [];
 			if (user.IP) actions.push( '<span class="link" onMouseUp="$P().ban_user('+idx+')"><b>Ban</b></span>' );
 			if (user.Live) actions.push( '<span class="link" onMouseUp="$P().boot_user('+idx+')"><b>Boot</b></span>' );
 			if (user.Registered) {
 				return [
-					'<div class="td_big"><a href="#Users?sub=edit&username='+user.Username+'">' + this.get_user_disp(user) + '</a></div>',
+					'<div class="td_big"><a href="#Users?sub=edit&username='+user.Username+'">' + self.get_user_disp(user) + '</a></div>',
 					user.FullName,
 					user.Live ? '<span class="color_label online">Yes</span>' : '<span class="color_label offline">No</span>',
 					user.IP ? user.IP : 'n/a',
