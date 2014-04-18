@@ -798,10 +798,13 @@ sub _daemon_cmd_away {
 	my $ref = POE::Component::Server::IRC::_daemon_cmd_away($self, $nick, $msg);
 	
 	if ($record->{away}) {
+		$msg =~ s/\W+//; $msg ||= 'Away';
 		$self->{resident}->log_debug(5, "User $nick going into away state: $msg");
-		if ($nick !~ /\[Away]$/i) {
-			my $orig_nick = $nick; $orig_nick =~ s/\[\w+\]$//;
-			$self->_daemon_cmd_nick( $nick, $orig_nick . '[Away]' );
+		
+		my $orig_nick = $nick; $orig_nick =~ s/\[\w+\]$//;
+		my $new_nick = $orig_nick . "[$msg]";
+		if (($new_nick ne $orig_nick) && (length($new_nick) < $self->{resident}->{config}->{MaxNickLength})) {
+			$self->_daemon_cmd_nick( $nick, $new_nick );
 		}
 	}
 	else {
