@@ -785,38 +785,32 @@ sub _daemon_cmd_who {
 	return $ref;
 }
 
-sub _daemon_cmd_away {
-	# overriding POE::Component::Server::IRC::_daemon_cmd_away
-	# so we can add our own Nick[Away] functionality on top of the default
+sub _daemon_cmd_status {
+	# Set status in your nickname, e.g. Nick[Away]
 	my $self = shift;
 	my $nick   = shift || return;
-	my $msg    = shift;
+	my $status    = join(' ', @_);
 	my $record = $self->{state}{users}{uc_irc($nick)};
 	
-	if (!$msg && !$record->{away}) { $msg = "Away"; }
-	
-	my $ref = POE::Component::Server::IRC::_daemon_cmd_away($self, $nick, $msg);
-	
-	if ($record->{away}) {
-		$msg =~ s/\W+//; $msg ||= 'Away';
-		$self->{resident}->log_debug(5, "User $nick going into away state: $msg");
-		
+	if ($status) {
+		# set nick status
+		$status =~ s/\W+/_/g;
 		my $orig_nick = $nick; $orig_nick =~ s/\[\w+\]$//;
-		my $new_nick = $orig_nick . "[$msg]";
+		my $new_nick = $orig_nick . "[$status]";
 		if (($new_nick ne $orig_nick) && (length($new_nick) < $self->{resident}->{config}->{MaxNickLength})) {
-			$self->_daemon_cmd_nick( $nick, $new_nick );
+			$self->{resident}->log_debug(5, "User $nick setting nick status to: $status");
+			return $self->_daemon_cmd_nick( $nick, $new_nick );
 		}
 	}
-	else {
-		$self->{resident}->log_debug(5, "User $nick is back, removing away state");
-		if ($nick =~ /\[\w+\]$/) {
-			my $orig_nick = $nick; $orig_nick =~ s/\[\w+\]$//;
-			$self->_daemon_cmd_nick( $nick, $orig_nick );
-		}
+	elsif ($nick =~ /\[\w+\]$/) {
+		# remove nick status
+		$self->{resident}->log_debug(5, "User $nick is removing nick status");
+		my $orig_nick = $nick; $orig_nick =~ s/\[\w+\]$//;
+		return $self->_daemon_cmd_nick( $nick, $orig_nick );
 	}
 	
-	return @$ref if wantarray;
-	return $ref;
+	return () if wantarray;
+	return [];
 }
 
 sub _daemon_cmd_topic {
@@ -1295,7 +1289,7 @@ sub _cmd_from_client {
 		
 		if ($input->{command} eq 'PRIVMSG') {
 			# if user is away but is now talking, remove away status
-			if ($record->{away}) { $self->_daemon_cmd_away($nick); }
+			if ($nick =~ /\[\w+\]$/) { $self->_daemon_cmd_status($nick); }
 		}
 		
 	} # raw_line
