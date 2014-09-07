@@ -7,3 +7,4 @@ LWP::UserAgent
 URI::Escape
 HTTP::Date
 IRC::Utils
+HTTP::Daemon
