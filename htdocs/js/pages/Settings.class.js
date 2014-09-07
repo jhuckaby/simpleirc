@@ -202,16 +202,19 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 		// WebServer Port
 		html += get_form_table_row( 'webgroup', 'Port Number', '<input type="text" id="fe_es_web_port" size="4" placeholder="80" value="'+escape_text_field_value(config.WebServer.Port)+'"/>' );
 		html += get_form_table_caption( 'webgroup', "Enter the port number the web server should listen on.  Standard ports are 80 for HTTP and 443 for HTTPS.");
-		html += get_form_table_spacer('webgroup', 'short transparent');
 		
 		// WebServer SSL
-		html += get_form_table_row( 'webgroup', 'Secure HTTPS', '<input type="checkbox" id="fe_es_web_ssl" value="1" '+(config.WebServer.SSL ? 'checked="checked"' : '')+' onChange="$P().setWebServerSSL(this.checked)"/><label for="fe_es_web_ssl">Enable SSL (HTTPS)</label>' );
-		html += get_form_table_caption( 'webgroup', "This enables SSL (HTTPS) encryption on the web server.  This requires a SSL certificate (an example one is provided for testing, but shouldn't be used for production).");
-		html += get_form_table_spacer('webgroup', 'short transparent');
-		
-		// WebServer RedirectNonSSLPort
-		html += get_form_table_row( 'webgroup', 'Non-SSL Redirect', '<table cellspacing="0" cellpadding="0"><tr><td><input type="checkbox" id="fe_es_web_nsr_enabled" value="1" '+(config.WebServer.RedirectNonSSLPort ? 'checked="checked"' : '')+'/></td><td><label for="fe_es_web_nsr_enabled" style="font-size:13px;">Enable non-ssl HTTP redirects on port:</label>&nbsp;</td><td><input type="text" id="fe_es_web_nsr_port" size="6" placeholder="80" value="'+escape_text_field_value(config.WebServer.RedirectNonSSLPort)+'"/></td></tr></table>' );
-		html += get_form_table_caption( 'webgroup', "If HTTPS is enabled, you can optionally have the web server also listen on a standard HTTP port such as 80, and redirect all traffic to HTTPS.");
+		if (!config.WebServer.Alternate) {
+			html += get_form_table_spacer('webgroup', 'short transparent');
+			
+			html += get_form_table_row( 'webgroup', 'Secure HTTPS', '<input type="checkbox" id="fe_es_web_ssl" value="1" '+(config.WebServer.SSL ? 'checked="checked"' : '')+' onChange="$P().setWebServerSSL(this.checked)"/><label for="fe_es_web_ssl">Enable SSL (HTTPS)</label>' );
+			html += get_form_table_caption( 'webgroup', "This enables SSL (HTTPS) encryption on the web server.  This requires a SSL certificate (an example one is provided for testing, but shouldn't be used for production).");
+			html += get_form_table_spacer('webgroup', 'short transparent');
+			
+			// WebServer RedirectNonSSLPort
+			html += get_form_table_row( 'webgroup', 'Non-SSL Redirect', '<table cellspacing="0" cellpadding="0"><tr><td><input type="checkbox" id="fe_es_web_nsr_enabled" value="1" '+(config.WebServer.RedirectNonSSLPort ? 'checked="checked"' : '')+'/></td><td><label for="fe_es_web_nsr_enabled" style="font-size:13px;">Enable non-ssl HTTP redirects on port:</label>&nbsp;</td><td><input type="text" id="fe_es_web_nsr_port" size="6" placeholder="80" value="'+escape_text_field_value(config.WebServer.RedirectNonSSLPort)+'"/></td></tr></table>' );
+			html += get_form_table_caption( 'webgroup', "If HTTPS is enabled, you can optionally have the web server also listen on a standard HTTP port such as 80, and redirect all traffic to HTTPS.");
+		} // alternate
 		
 		html += get_form_table_spacer();
 		
@@ -489,8 +492,9 @@ Class.subclass( AppStr.Page.Base, "AppStr.Page.Settings", {
 			WebServer: {
 				Enabled: $('#fe_es_web_enabled').is(':checked') ? 1 : 0,
 				Port: trim($('#fe_es_web_port').val()),
-				SSL: $('#fe_es_web_ssl').is(':checked') ? 1 : 0,
-				RedirectNonSSLPort: trim($('#fe_es_web_nsr_enabled').is(':checked') ? $('#fe_es_web_nsr_port').val() : '')
+				SSL: (!config.WebServer.Alternate && $('#fe_es_web_ssl').is(':checked')) ? 1 : 0,
+				RedirectNonSSLPort: (!config.WebServer.Alternate && $('#fe_es_web_nsr_enabled').is(':checked')) ? 
+					trim($('#fe_es_web_nsr_port').val()) : ''
 			},
 			MaskIPs: {
 				Enabled: $('#fe_es_maskips').is(':checked') ? 1 : 0
