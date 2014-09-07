@@ -65,6 +65,7 @@
 	
 	"WebServer": {
 		"Enabled": 1,
+		"Alternate": 1,
 		"Port": 8080,
 		"SSL": 0,
 		"RedirectNonSSLPort": 0,
