@@ -34,7 +34,7 @@ BEGIN
     use vars qw(@ISA @EXPORT @EXPORT_OK);
 
     @ISA		= qw(Exporter);
-    @EXPORT		= qw(get_user_aliases update_user_aliases XMLalwaysarray load_file save_file save_file_atomic get_hostname get_bytes_from_text get_text_from_bytes short_float commify pct pluralize alphanum ascii_table file_copy file_move generate_unique_id memory_substitute memory_lookup find_files ipv4_to_hostname hostname_to_ipv4 wget escape_js normalize_midnight yyyy_mm_dd mm_dd_yyyy yyyy get_nice_date get_nice_time follow_symlinks get_remote_ip get_user_agent strip_high merge_hashes xml_post parse_query compose_query parse_xml compose_xml decode_entities encode_entities encode_attrib_entities xpath_lookup db_query parse_cookies touch probably rand_array find_elem_idx find_object find_object_idx delete_object dumper serialize_object deep_copy trim file_get_contents file_put_contents preg_match preg_replace make_dirs_for json_parse json_compose json_compose_pretty normalize_channel nch strip_channel sch normalize_nick nnick guess_content_type remove_key_recursive find_bin);
+    @EXPORT		= qw(get_user_aliases update_user_aliases XMLalwaysarray load_file save_file save_file_atomic get_hostname get_bytes_from_text get_text_from_bytes short_float commify pct pluralize alphanum ascii_table file_copy file_move generate_unique_id memory_substitute memory_lookup find_files ipv4_to_hostname hostname_to_ipv4 wget escape_js normalize_midnight yyyy_mm_dd mm_dd_yyyy yyyy get_nice_date get_nice_time follow_symlinks get_remote_ip get_user_agent strip_high merge_hashes xml_post parse_query compose_query parse_xml compose_xml decode_entities encode_entities encode_attrib_entities xpath_lookup db_query parse_cookies touch probably rand_array find_elem_idx find_object find_object_idx delete_object dumper serialize_object deep_copy trim file_get_contents file_put_contents preg_match preg_replace make_dirs_for json_parse json_compose json_compose_pretty normalize_channel nch strip_channel sch normalize_nick nnick guess_content_type remove_key_recursive find_bin get_seconds_from_text);
 	@EXPORT_OK	= qw();
 	
 	MIME::Types->new();
@@ -1237,6 +1237,67 @@ sub find_bin {
 	}
 	
 	return '';
+}
+
+sub get_seconds_from_text {
+	##
+	# Given text string, calculates total number of seconds.
+	# Accepts many formats:
+	#
+	# Examples:
+	#	'18.5 Sec'       -> 18.5
+	#	'-45 minutes'    -> -2700
+	#	'+2d'            -> 172800
+	#	'3 DAYS 2 HOURS' -> 266400
+	#	'Today +75d'     -> 1000673791 # today == current epoch
+	#	'1 Year, 1 Week' -> 32240800
+	#	'+3w -2h +10min' -> 1807800
+	##
+	my $text = shift;
+	
+	##
+	# Regexp prefix for second, minute, hour, day, week, month, year rules.
+	# Allows negative or positive integers or floats, allows space padding.
+	##
+	my $prefix = '([\-\+])?\s*(\d+(\.\d+)?)\s*';
+	
+	##
+	# See if user passed in simple numerical value.
+	# If so, return it immediately -- no processing needed.
+	##
+	if ($text =~ /^\s*$prefix$/) {return $text;}
+	
+	##
+	# Start with 0 seconds, then add or subtract as we go.
+	##
+	my $seconds = 0;
+	
+	##
+	# Define rules that translate text into raw seconds.
+	##
+	my $rules = {
+		'today' => 'time()', # turns 'today' into epoch seconds
+		$prefix.'s' => '$2', # plain seconds
+		$prefix.'mi' => '($2 * 60)', # minutes
+		$prefix.'h' => '($2 * 3600)', # hours
+		$prefix.'d' => '($2 * 86400)', # days
+		$prefix.'w' => '($2 * 604800)', # weeks
+		$prefix.'mo' => '($2 * 2592000)', # months (30 days)
+		$prefix.'y' => '($2 * 31536000)' # years (365 days)
+	};
+	
+	##
+	# Step through each rule, matching it to the text string.
+	# Increments or decrements $seconds accordingly.
+	##
+	foreach my $rule (keys %{$rules}) {
+		$text =~ s/$rule/eval('$seconds'.($1 || '+').'='.$rules->{$rule}.';');'';/ieg;
+	}
+	
+	##
+	# Return final value in seconds.
+	##
+	return $seconds;
 }
 
 1;
