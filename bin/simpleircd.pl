@@ -43,7 +43,8 @@ use VersionInfo;
 
 $| = 1;
 
-$SIG{'__DIE__'} = sub { Carp::cluck("Stack Trace: "); };
+# POE throws a bunch of exceptions which makes this freak out at startup -- commenting it out
+# $SIG{'__DIE__'} = sub { Carp::cluck("Stack Trace: "); };
 
 my $args = new Args( @ARGV );
 
@@ -72,6 +73,7 @@ remove_key_recursive( $config, '//' );
 
 # check for command-line debug mode
 if ($args->{debug}) {
+	$SIG{'__DIE__'} = sub { Carp::cluck("Stack Trace: "); };
 	$config->{Logging}->{EchoToConsole} = 1;
 }
 else {
@@ -132,66 +134,55 @@ $pocosi->{resident} = $resident;
 
 # Web server
 if ($config->{WebServer}->{Enabled}) {
-	my $extra_opts = {};
-	if ($config->{WebServer}->{SSL}) {
-		# Set the key + certificate file
-		eval { SSLify_Options( $config->{SSL}->{KeyFile}, $config->{SSL}->{CertFile} ) };
-		if ( $@ ) { die "SSLify: $@"; }
+	if ($config->{WebServer}->{Alternate}) {
+		# alternate implementation (low-level raw sockets, lots of debugging)
+		$resident->log_debug(3, "Setting up alternate async HTTP socket listener system");
 		
-		$extra_opts->{ClientPreConnect} = sub {
-			# SSLify the socket, which is in $_[ARG0].
-			my $socket = eval { Server_SSLify($_[ARG0]) };
-			return undef if $@;
-
-			# Return the SSL-ified socket.
-			return $socket;
-		};
-	}
-	
-	$resident->log_debug(3, "Opening HTTP".($config->{WebServer}->{SSL} ? 'S (SSL)' : '')." socket listener on port " . $config->{WebServer}->{Port});
-	
-	POE::Component::Server::TCP->new(
-		Alias => "httpd",
-		Port => $config->{WebServer}->{Port},
-		ClientFilter => 'POE::Filter::HTTPD',
-		
-		ClientInput => sub {
-			my ($kernel, $heap, $request) = @_[KERNEL, HEAP, ARG0];
-			
-			if ($request->isa("HTTP::Response")) {
-				# request parse error
-				$heap->{client}->put($request);
-				$kernel->yield("shutdown");
-				return;
+		POE::Session->create(
+			inline_states => {
+				_start => sub {
+					$resident->web_server_start( $_[KERNEL], $_[HEAP] );
+				},
+				event_accept => sub {
+					$resident->web_server_accept( $_[KERNEL], $_[HEAP], $_[ARG0] );
+				},
+				event_read => sub {
+					$resident->web_server_read( $_[KERNEL], $_[HEAP], $_[ARG0] );
+				},
+				event_write => sub {
+					$resident->web_server_write( $_[KERNEL], $_[HEAP], $_[ARG0] );
+				},
+				event_error => sub {
+					$resident->web_server_error( $_[KERNEL], $_[HEAP], $_[ARG0] );
+				}
 			}
+		);
+	} # alt implementation
+	else {
+		# standard implementation
+		my $extra_opts = {};
+		if ($config->{WebServer}->{SSL}) {
+			# Set the key + certificate file
+			eval { SSLify_Options( $config->{SSL}->{KeyFile}, $config->{SSL}->{CertFile} ) };
+			if ( $@ ) { die "SSLify: $@"; }
 			
-			my $response = HTTP::Response->new(200);
-			$response->header( Connection => 'close' );
-			$response->header( Server => 'SimpleIRC Web v' . $version->{Major} . '-' . $version->{Minor} . ' (' . $version->{Branch} . ')' );
-			$response->header( Date => time2str( time() ) );
-			
-			$resident->handle_web_request(
-				request => $request, 
-				response => $response,
-				ip => $heap->{remote_ip},
-				client => $heap->{client},
-				heap => $heap
-			);
-			
-			$heap->{client}->put($response);
-			$kernel->yield("shutdown");
-		},
+			$extra_opts->{ClientPreConnect} = sub {
+				# SSLify the socket, which is in $_[ARG0].
+				my $socket = eval { Server_SSLify($_[ARG0]) };
+				return undef if $@;
+
+				# Return the SSL-ified socket.
+				return $socket;
+			};
+		}
 		
-		%$extra_opts
-	);
-	
-	if ($config->{WebServer}->{RedirectNonSSLPort}) {
-		$resident->log_debug(3, "Opening HTTP socket listener for non-SSL redirects on port " . $config->{WebServer}->{RedirectNonSSLPort});
+		$resident->log_debug(3, "Opening HTTP".($config->{WebServer}->{SSL} ? 'S (SSL)' : '')." socket listener on port " . $config->{WebServer}->{Port});
 		
 		POE::Component::Server::TCP->new(
-			Alias => "httpd_nonssl_redirect",
-			Port => $config->{WebServer}->{RedirectNonSSLPort},
+			Alias => "httpd",
+			Port => $config->{WebServer}->{Port},
 			ClientFilter => 'POE::Filter::HTTPD',
+			
 			ClientInput => sub {
 				my ($kernel, $heap, $request) = @_[KERNEL, HEAP, ARG0];
 				
@@ -202,22 +193,60 @@ if ($config->{WebServer}->{Enabled}) {
 					return;
 				}
 				
-				my $redirect_url = 'https://' . $request->header('Host');
-				$redirect_url =~ s/\:\d+$//;
-				if ($config->{WebServer}->{Port} != 443) { $redirect_url .= ':' . $config->{WebServer}->{Port}; }
-				$redirect_url .= $request->uri();
-				
-				$resident->log_debug(7, "Caught non-SSL request, redirecting to: $redirect_url");
-				
-				my $response = HTTP::Response->new(302);
+				my $response = HTTP::Response->new(200);
 				$response->header( Connection => 'close' );
-				$response->header( Server => 'SimpleIRCWeb v1.0' );
-				$response->header( Location => $redirect_url );
+				$response->header( Server => 'SimpleIRC Web v' . $version->{Major} . '-' . $version->{Minor} . ' (' . $version->{Branch} . ')' );
+				$response->header( Date => time2str( time() ) );
+				
+				$resident->handle_web_request(
+					request => $request, 
+					response => $response,
+					ip => $heap->{remote_ip},
+					client => $heap->{client},
+					heap => $heap
+				);
+				
 				$heap->{client}->put($response);
 				$kernel->yield("shutdown");
-			}
+			},
+			
+			%$extra_opts
 		);
-	}
+		
+		if ($config->{WebServer}->{RedirectNonSSLPort}) {
+			$resident->log_debug(3, "Opening HTTP socket listener for non-SSL redirects on port " . $config->{WebServer}->{RedirectNonSSLPort});
+			
+			POE::Component::Server::TCP->new(
+				Alias => "httpd_nonssl_redirect",
+				Port => $config->{WebServer}->{RedirectNonSSLPort},
+				ClientFilter => 'POE::Filter::HTTPD',
+				ClientInput => sub {
+					my ($kernel, $heap, $request) = @_[KERNEL, HEAP, ARG0];
+					
+					if ($request->isa("HTTP::Response")) {
+						# request parse error
+						$heap->{client}->put($request);
+						$kernel->yield("shutdown");
+						return;
+					}
+					
+					my $redirect_url = 'https://' . $request->header('Host');
+					$redirect_url =~ s/\:\d+$//;
+					if ($config->{WebServer}->{Port} != 443) { $redirect_url .= ':' . $config->{WebServer}->{Port}; }
+					$redirect_url .= $request->uri();
+					
+					$resident->log_debug(7, "Caught non-SSL request, redirecting to: $redirect_url");
+					
+					my $response = HTTP::Response->new(302);
+					$response->header( Connection => 'close' );
+					$response->header( Server => 'SimpleIRCWeb v1.0' );
+					$response->header( Location => $redirect_url );
+					$heap->{client}->put($response);
+					$kernel->yield("shutdown");
+				}
+			);
+		} # RedirectNonSSLPort
+	} # standard implementation
 } # httpd enabled
 
 POE::Session->create(
@@ -1076,9 +1105,10 @@ sub _daemon_cmd_userinfo {
 	my $nick = shift;
 	my $is_admin = $ircd->{resident}->is_admin($nick);
 	my $target_nick = lc(join('', @_));
+	my $actual_nick = nnick($target_nick);
 	my $lines = [];
 	
-	push @$lines, "Information for user: $target_nick";
+	push @$lines, "Information for user: $target_nick ($actual_nick)";
 	
 	my $full = $ircd->state_user_full($target_nick);
 	if ($full) { push @$lines, "Identification: $full"; }
@@ -1110,10 +1140,10 @@ sub _daemon_cmd_userinfo {
 		my $chan_info = [];
 		foreach my $chan (@{$ircd->{resident}->get_all_channel_ids()}) {
 			my $channel = $ircd->{resident}->get_channel($chan);
-			if ($channel->{Users}->{$target_nick}) {
+			if ($channel->{Users}->{$actual_nick}) {
 				my $info = '#' . $chan;
-				my $flags = $channel->{Users}->{$target_nick}->{Flags} || '';
-				if ($channel->{Founder} eq $target_nick) { $flags .= 'f'; }
+				my $flags = $channel->{Users}->{$actual_nick}->{Flags} || '';
+				if ($channel->{Founder} eq $actual_nick) { $flags .= 'f'; }
 				if ($flags) {
 					$info .= ' (+' . $flags . ')';
 				}
@@ -1191,6 +1221,69 @@ sub _daemon_cmd_register {
 		my $chanserv = $ircd->plugin_get( 'ChanServ' );
 		$chanserv->IRCD_daemon_privmsg( $ircd, \$nick, \"ChanServ", \$msg, [] );
 	}
+	
+	return () if wantarray;
+	return [];
+}
+
+sub _daemon_cmd_deletelogs {
+	# delete last N time off transaction log for PRIVMSG in a given channel
+	my $ircd = shift;
+	my $nick = shift;
+	my $chan = shift;
+	my $raw_time = join(' ', @_);
+	my $is_admin = $ircd->{resident}->is_admin($nick);
+	$chan = nch($chan);
+	my $chan_strip = sch($chan);
+	
+	if ($is_admin && $chan && $raw_time) {
+		my $now = time();
+		my $delta_time = get_seconds_from_text( $raw_time );
+		my $log_file = $ircd->{resident}->{config}->{Logging}->{LogDir} . '/transcript.log';
+		my $temp_file = $log_file . '.tmp';
+		my $count = 0;
+		
+		my $fh_in = FileHandle->new( $log_file );
+		if ($fh_in) {
+			my $fh_out = FileHandle->new( ">" . $temp_file );
+			while (my $line = <$fh_in>) {
+				my $okay = 1;
+				
+				if ($line =~ /^\[(\d+)/) {
+					my $epoch = int($1);
+					if ($line =~ /\]\s+PRIVMSG\s+\#$chan_strip\s+\:/) {
+						if ($epoch >= $now - $delta_time) { $okay = 0; }
+					}
+				}
+				
+				if ($okay) {
+					$fh_out->print( $line );
+				}
+				else {
+					$count++;
+				}
+			} # foreach line in log
+			
+			undef $fh_in;
+			undef $fh_out;
+			
+			my $msg = '';
+			if ($count) {
+				rename( $temp_file, $log_file );
+				$msg = "Removed last $raw_time ($count entries) from $chan channel transcript.";
+			}
+			else {
+				$msg = "No transcript entries found in last $raw_time for $chan channel -- log file untouched.";
+			}
+			$ircd->{resident}->log_debug(9, $msg);
+			
+			$ircd->_send_output_to_channel( $chan, { 
+				prefix => 'Server', 
+				command => 'NOTICE', 
+				params => [$chan, $msg] 
+			} );
+		} # found log
+	} # is admin
 	
 	return () if wantarray;
 	return [];
