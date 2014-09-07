@@ -14,5 +14,6 @@ RELOADCONFIG - Reload server configuration, if it has changed on disk (admin onl
 UPGRADE - Upgrade server to latest version in current branch (admin only).
 UPGRADE <branch> - Switch to another branch (i.e. "dev", "stable") and upgrade (admin only).
 STATUS <message> - Set your status by changing your nick to "Nick[Away]" or any specified string.
+DELETELOGS <channel> <time> - Delete chunk from transcript for channel and time (admin only).
 -
 End of Help
