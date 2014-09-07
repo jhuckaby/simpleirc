@@ -8,6 +8,8 @@ use HTTP::Date;
 use Digest::MD5 qw(md5_hex);
 use VersionInfo;
 use IRC::Utils ':ALL';
+use POSIX;
+use HTTP::Daemon;
 
 my $nice_log_cat_names = {
 	transcript => 'Chat Transcript',
@@ -15,6 +17,247 @@ my $nice_log_cat_names = {
 	error => 'Error Log',
 	maint => 'Maintenance Log'
 };
+
+# The web_server_* methods are used by the 'Alternate' web server configuration (enable in config.json).
+# They provide much more low-level, verbose debug logging, and do not use POE::Component::Server::TCP.
+
+sub web_server_start {
+	# start web socket listener for alternate implementation
+	my ($self, $kernel, $heap) = @_;
+	$self->{web_server_version} = get_version();
+	$self->{web_server_sessions} = {};
+	$self->{next_ws_client_id} = 1;
+	
+	$self->log_debug(3, "Opening HTTP socket listener on port " . $self->{config}->{WebServer}->{Port});
+	
+	my $server = HTTP::Daemon->new(
+		LocalPort => $self->{config}->{WebServer}->{Port},
+		Listen => 10,
+		ReuseAddr => "yes"
+	) or die "ERROR: Could not create socket listener: $@\n";
+	
+	$kernel->select_read($server, "event_accept");
+}
+
+sub web_server_accept {
+	# accept new incoming connection
+	my ($self, $kernel, $heap, $server) = @_;
+	
+	my $client = $server->accept();
+	my $remote_ip = $client->peerhost();
+	my $client_id = 'W' . int($self->{next_ws_client_id}++);
+	
+	$self->log_debug(3, "New incoming web socket connection from: $remote_ip (New Client ID: $client_id)");
+	
+	$self->{web_server_sessions}->{$client} = {
+		id => $client_id,
+		client => $client,
+		server => $server,
+		ip => $remote_ip,
+		first_read => 1
+	};
+	
+	my $num_clients = scalar keys %{$self->{web_server_sessions}};
+	$self->log_debug(9, "Current simultaneous web clients: $num_clients");
+	
+	$kernel->select_read($client, "event_read");
+}
+
+sub web_server_read {
+	# read data from open request conn
+	my ($self, $kernel, $heap, $client) = @_;
+	my $session = $self->{web_server_sessions}->{$client};
+	my $client_id = $session->{id};
+	my $first = 0;
+	
+	if (defined($session->{output})) {
+		# socket already in write mode, but sometimes read gets called again (sigh)
+		# just ignore it and pray
+		return;
+	}
+	
+	if ($session->{first_read}) {
+		$first = 1;
+		delete $session->{first_read};
+		$self->log_debug(9, "First read for web client $client_id");
+		
+		my $req = $client->get_request( 'headers_only' );
+		if (!$req) {
+			# error parsing request
+			$self->log_error("Error parsing request for client $client_id: ".$client->reason().", aborting connection");
+			$kernel->select($client);
+			close $client;
+			delete $self->{web_server_sessions}->{$client};
+			return;
+		}
+		
+		# add request to session
+		$session->{req} = $req;
+		$session->{data} = '';
+		$session->{len} = $req->header('Content-Length') || 0;
+		
+		# curl seems to send this thing, gah
+		if ($req->header('Expect')) {
+			$self->log_debug(9, "Sending HTTP 100 Continue (file upload)");
+			$client->send_status_line( 100 );
+			$client->send_crlf();
+		}
+		
+		if (!$session->{len}) {
+			# no more data to read, so handle request now
+			$self->log_debug(9, "No more bytes to read for client $client_id, handling request immediately");
+			$self->web_server_handle_request( $kernel, $heap, $session );
+			return;
+		}
+	} # first read
+	
+	# try getting buffer from HTTP::Daemon first (leftover from header read)
+	my $buffer = $client->read_buffer('');
+	
+	if ($first && !length($buffer)) {
+		$self->log_debug(9, "No data in buffer, but this is the first read for client $client_id, so dropping back into event loop");
+		return;
+	}
+	
+	if (!length($buffer)) {
+		# $self->log_debug(9, "Nothing in HTTP::Daemon buffer, reading from socket itself");
+		
+		my $rv = eval { $client->recv($buffer, POSIX::BUFSIZ, 0); };
+		unless (defined($rv) and length($buffer)) {
+			$self->log_error( "Could not read from socket (client $client_id), raising error: " . ($@ || 'Unknown'));
+			$kernel->yield( event_error => $client );
+			return;
+		}
+	}
+	
+	if (length($buffer)) {
+		$session->{data} .= $buffer;
+		$self->log_debug(9, "Read ".length($buffer)." bytes for client $client_id (Total: " . length($session->{data}) . " bytes)");
+		
+		if (length($session->{data}) == $session->{len}) {
+			# read all bytes, handle request
+			$self->log_debug(9, "All bytes read for client $client_id, handling request now");
+			$self->web_server_handle_request( $kernel, $heap, $session );
+		}
+	}
+	else {
+		$self->log_error( "Buffer has no length (client $client_id)" );
+		$kernel->yield( event_error => $client );
+	}
+}
+
+sub web_server_handle_request {
+	# handle raw incoming request for use in handle_web_request() below
+	my ($self, $kernel, $heap, $session) = @_;
+	
+	my $client_id = $session->{id};
+	my $client = $session->{client};
+	my $version = $self->{web_server_version};
+	my $request = $session->{req};
+	$request->content( $session->{data} );
+	
+	$self->log_debug(9, "Preparing to process HTTP request for client $client_id");
+	
+	# setup response object
+	my $response = HTTP::Response->new(200);
+	$response->header( Connection => 'close' );
+	$response->header( Server => 'SimpleIRC Web v' . $version->{Major} . '-' . $version->{Minor} . ' (' . $version->{Branch} . ')' );
+	$response->header( Date => time2str( time() ) );
+	
+	# process request as per usual
+	$self->handle_web_request(
+		request => $request, 
+		response => $response,
+		ip => $session->{ip},
+		client => $client,
+		heap => $heap
+	);
+	
+	# send response to socket
+	$self->log_debug(9, "Sending HTTP response for client $client_id");
+	
+	# send status line (e.g. 200 OK)
+	$client->send_status_line( $response->code() );
+	
+	# always include content-length header if we have data
+	if (length($response->content())) {
+		$response->header('Content-Length' => length($response->content()));
+	}
+	
+	# send response headers
+	foreach my $key ($response->headers()->header_field_names()) {
+		my $value = $response->header($key);
+		$client->send_header( $key, $value );
+	}
+	
+	# send delimiter
+	$client->send_crlf();
+	
+	if (length($response->content())) {
+		# we have content to write, so queue it up
+		$self->log_debug(9, "Preparing to async-write output data for client $client_id");
+		$session->{output} = $response->content();
+		$kernel->select_write($client, "event_write");
+	}
+	else {
+		# no content, end of request
+		$self->log_debug(9, "End of request for client $client_id, closing");
+		$kernel->select($client);
+		close $client;
+		delete $self->{web_server_sessions}->{$client};
+		return;
+	}
+}
+
+sub web_server_write {
+	# handle writing async data back to client
+	my ($self, $kernel, $heap, $client) = @_;
+	my $session = $self->{web_server_sessions}->{$client};
+	my $client_id = $session->{id};
+	
+	if (!length($session->{output})) {
+		$self->log_debug(9, "Nothing left to write for client $client_id, closing");
+		$kernel->select($client);
+		close $client;
+		delete $self->{web_server_sessions}->{$client};
+		return;
+	}
+	
+	my $buffer_size = POSIX::BUFSIZ;
+	my $buffer = '';
+	if (length($session->{output}) > $buffer_size) {
+		$buffer = substr( $session->{output}, 0, $buffer_size );
+		$session->{output} = substr( $session->{output}, $buffer_size );
+	}
+	else {
+		$buffer = $session->{output};
+		$session->{output} = '';
+	}
+	
+	$self->log_debug(9, "Writing ".length($buffer)." bytes for client $client_id (".length($session->{output})." bytes remain in buffer)");
+	
+	my $rv = eval { $client->send($buffer, 0); };
+	unless (defined $rv) {
+		$self->log_error("HTTP Socket write error: $@");
+		$kernel->yield( event_error => $client );
+		return;
+	}
+}
+
+sub web_server_error {
+	# handle web server error
+	my ($self, $kernel, $heap, $client) = @_;
+	
+	my $session = $self->{web_server_sessions}->{$client} || undef;
+	if ($session && $session->{id}) {
+		my $client_id = $session->{id};
+		$self->log_error("Web server error for client $client_id, aborting");
+		delete $self->{web_server_sessions}->{$client};
+	}
+	
+	$kernel->select($client);
+	close $client;
+}
 
 sub handle_web_request {
 	# handle incoming http request
@@ -1897,7 +2140,10 @@ sub api_upload_file {
 		return { Code => 1, Description => "Failed to upload file: $filename: $!" };
 	}
 	
-	my $url = $self->{config}->{WebServer}->{SSL} ? 'https://' : 'http://';
+	my $proto = $args->{request}->header('X-Forwarded-Proto') || '';
+	my $url = 'http://';
+	if (($proto =~ /https/i) || $self->{config}->{WebServer}->{SSL}) { $url = 'https://'; }
+	
 	$url .= $args->{request}->header('Host');
 	$url .= '/files/' . $sub_path;
 	
