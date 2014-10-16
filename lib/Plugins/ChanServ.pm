@@ -865,7 +865,7 @@ sub sync_all_user_modes {
 	$single_nick = nnick($single_nick);
 	
 	my $chans = $single_chan ? [lc(sch($single_chan))] : [keys %{$self->{resident}->{channels}}];
-	$self->log_debug(5, "Syncronizing ".($single_nick ? $single_nick : 'all')." user modes in channels: " . join(', ', @$chans));
+	$self->log_debug(5, "Synchronizing ".($single_nick ? $single_nick : 'all')." user modes in channels: " . join(', ', @$chans));
 	
 	foreach my $chan (@$chans) {
 		my $uchan = uc_irc( nch($chan) );
