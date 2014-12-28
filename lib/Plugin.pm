@@ -48,7 +48,7 @@ sub send_msg_to_user {
 	foreach my $line (split(/\n/, $msg)) {
 		next unless $line =~ /\S/;
 		$self->{ircd}->_send_output_to_client( $route_id, {
-			prefix  => $package,
+			prefix  => $self->{ircd}->state_user_full($package),
 			command => $type,
 			params  => [ $nick, $line ]
 		});
@@ -107,7 +107,7 @@ sub send_msg_to_channel {
 	$self->log_debug(9, "Sending $type to $chan: $msg");
 	
 	$self->{ircd}->_send_output_to_channel( $chan, { 
-		prefix => $package, 
+		prefix => $self->{ircd}->state_user_full($package),
 		command => $type, 
 		params => [$chan, $msg] 
 	} );
@@ -149,7 +149,7 @@ sub do_plugin_help {
 			if (!$route_id) { return; }
 							
 			$self->{ircd}->_send_output_to_client( $route_id, {
-				prefix  => $package,
+				prefix  => $self->{ircd}->state_user_full($package),
 				command => 'PRIVMSG',
 				params  => [ $nick, $line ]
 			});
