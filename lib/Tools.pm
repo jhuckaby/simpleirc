@@ -2186,6 +2186,8 @@ sub lookup_ref {
 	return $tree;
 }
 
+1;
+
 package XML::Lite::ScalarHandle;
 
 ##
